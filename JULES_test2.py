@@ -18,10 +18,11 @@ def keyval2keylabel(keyname, keyval):
 
 
 # JULES output file path/name
-root_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
+data_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
+outp_path = '/Users/jae35/Documents/nceo/'
 file_name = 'u-ck843_preprocessed.nc'
 
-dimensions, variables, global_attributes = readJULES.read_jules_header(root_path+file_name)
+dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
 
 print('vars: ', variables)
 
@@ -33,11 +34,11 @@ cmap = 'inferno'
 for variable_name in list(variable_names.keys()):
 
     # Variable to plot, its full array
-    variable_array, variable_unit, variable_long_name = readJULES.read_jules_m2(root_path + file_name, variable_name)
+    variable_array, variable_unit, variable_long_name = readJULES.read_jules_m2(data_path + file_name, variable_name)
 
     # Coordinates, their full arrays
-    lats, lats_units, lats_long_name = readJULES.read_jules_m2(root_path + file_name, 'lat')
-    lons, lons_units, lons_long_name = readJULES.read_jules_m2(root_path + file_name, 'lon')
+    lats, lats_units, lats_long_name = readJULES.read_jules_m2(data_path + file_name, 'lat')
+    lons, lons_units, lons_long_name = readJULES.read_jules_m2(data_path + file_name, 'lon')
     lon2d, lat2d = np.meshgrid(lons, lats)
 
     # Get the variable's dimension keys and values, for slicing
@@ -61,6 +62,9 @@ for variable_name in list(variable_names.keys()):
 
     areal_mean = processJULES.areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2)
 
-    print('test: ', round(areal_mean,2))
+    # Save the final map to the workspace directory
+    translation_table = str.maketrans({char: "" for char in "[]',."})
+    cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_")
+    plt.savefig(outp_path + variable_name + '_' + cleaned_text + '.png')
 
-plt.show()
+#plt.show()
