@@ -37,9 +37,9 @@ dimensions, variables, global_attributes = readJULES.read_jules_header(data_path
 
 #readJULES.get_variable_details(variables, data_path, file_name)
 
-# Variable(s) to visualize, with their dimension keys and values
-variable_names = {'t_soil':    {'time':6, 'soil':0},
-                  'fch4_wetl': {'time':6}}
+# Variable(s) to visualize
+variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb']
+
 cmap = 'inferno'
 year = 2016
 
@@ -53,10 +53,11 @@ lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path 
 lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, 'lon')
 lon2d, lat2d = np.meshgrid(lons, lats)
 
-for variable_name in list(variable_names.keys()):
+for variable_name in variable_names:
 
     # Variable to plot, its full array
     variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
+    variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
 
     print(variable_name, np.shape(variable_array))
 
@@ -66,7 +67,7 @@ for variable_name in list(variable_names.keys()):
         variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
 
     # Get the variable's dimension keys and values, for slicing
-    variable_dimension_keys = list(variable_names[variable_name].keys())
+    #variable_dimension_keys = list(variable_names[variable_name].keys())
 
     # Get the variable's iterable dimension keys and their axis lengths (axes other than 'lon' and 'lat')
     iterable_dimension_mask = ~np.isin(list(variable_dims), ['lon', 'lat'])
@@ -78,16 +79,6 @@ for variable_name in list(variable_names.keys()):
     print('keys: ', iterable_dimension_keys)
     print('idxs: ', iterable_dimension_idxs)
     print('iter: ', iterable_dimension_iter)
-
-    # Slice the variable along desired dimensions, i.e., month 3, layer 1, etc.
-    #key_labels = []
-    #for var_dim_key in variable_dimension_keys:
-    #for var_dim_key in iterable_dimension_keys:
-    #    slice_index = variable_names[variable_name][var_dim_key]
-    #    #print(var_dim_key, slice_index)
-    #    variable_array = variable_array[slice_index]
-    #    key_labels.append(keyval2keylabel(var_dim_key, slice_index))  # Labels describing the slices, for plotting
-    #variable_array = np.transpose(variable_array)
 
     indices = generate_indices(list(iterable_dimension_iter))
     for combo in indices:
@@ -116,7 +107,7 @@ for variable_name in list(variable_names.keys()):
         print(np.shape(variable_array2))
 
         # Overlay the sliced variable with contours
-        mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, cmap)
+        mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, cmap, variable_global_min, variable_global_max)
 
         areal_mean = processJULES.areal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2)
 

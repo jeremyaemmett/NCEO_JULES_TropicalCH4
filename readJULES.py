@@ -41,6 +41,8 @@ def read_jules_m2(file_path, variable):
     units = data_dict[variable]['attrs'].get('units', 'unknown')
     dims = data_dict[variable]['dims']
 
+    array_min, array_max = np.min(array), np.max(array)
+
     return array, units, long_name, dims
 
 

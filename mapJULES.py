@@ -27,10 +27,10 @@ def world_map(lats, lons):
     return fig, ax
 
 
-def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap):
+def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap, variable_global_min, variable_global_max):
 
     c = ax.contourf(lon2d, lat2d, variable_array,
-                    levels=20, cmap=cmap, transform=ccrs.PlateCarree())
+                    levels=np.linspace(variable_global_min, variable_global_max, 20), cmap=cmap, transform=ccrs.PlateCarree())
     cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
     cb.set_label(variable_unit)
     #ax.set_title(variable_name + ': \n' + variable_long_name, fontstyle='italic', fontweight='bold')
