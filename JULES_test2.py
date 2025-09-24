@@ -4,17 +4,28 @@ import numpy as np
 import readJULES
 import mapJULES
 import warnings
+import os
 
 
 def keyval2keylabel(keyname, keyval):
 
-    if keyname == 'month': labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    if keyname == 'time': labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     if keyname == 'pool': labels = ['DPM', 'RPM', 'Micro. Bio', 'Humus']
-    if keyname == 'layer': labels = ['0-0.1 m', '0.1-0.35 m', '0.35-1.0 m', '1.0-2.0 m']
+    if keyname == 'soil': labels = ['0-0.1 m', '0.1-0.35 m', '0.35-1.0 m', '1.0-2.0 m']
+    if keyname == 'pft':  labels = ['pft1', 'pft2', 'pft3', 'pft4', 'pft5', 'pft6', 'pft7', 'pft8', 'pft9', 'pft10', 'pft11', 'pft12', 'pft13']
 
     key_label = labels[keyval]
 
     return key_label
+
+
+def generate_indices(shape):
+
+    if not shape:
+        return [()]
+    
+    rest = generate_indices(shape[1:])
+    return [(i,) + r for i in range(shape[0]) for r in rest]
 
 
 # JULES output file path/name
@@ -24,47 +35,97 @@ file_name = 'u-ck843_preprocessed.nc'
 
 dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
 
-print('vars: ', variables)
+#readJULES.get_variable_details(variables, data_path, file_name)
 
 # Variable(s) to visualize, with their dimension keys and values
-variable_names = {'fch4_wetl': {'month':6},
-                  't_soil':    {'month':6, 'layer':0}}
+variable_names = {'t_soil':    {'time':6, 'soil':0},
+                  'fch4_wetl': {'time':6}}
 cmap = 'inferno'
+year = 2016
+
+# Time, its full array
+times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
+# Get the time dimension indices that fall within the desired year
+year_indices = np.where((times >= np.datetime64(f'{year}-01-01')) & (times < np.datetime64(f'{year + 1}-01-01')))[0]
+
+# Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
+lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, 'lat')
+lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, 'lon')
+lon2d, lat2d = np.meshgrid(lons, lats)
 
 for variable_name in list(variable_names.keys()):
 
     # Variable to plot, its full array
-    variable_array, variable_unit, variable_long_name = readJULES.read_jules_m2(data_path + file_name, variable_name)
+    variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
 
-    # Coordinates, their full arrays
-    lats, lats_units, lats_long_name = readJULES.read_jules_m2(data_path + file_name, 'lat')
-    lons, lons_units, lons_long_name = readJULES.read_jules_m2(data_path + file_name, 'lon')
-    lon2d, lat2d = np.meshgrid(lons, lats)
+    print(variable_name, np.shape(variable_array))
+
+    # If the variable has a 'time' axis, trim it along the time axis to the desired year
+    if 'time' in variable_dims:
+        time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
+        variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
 
     # Get the variable's dimension keys and values, for slicing
     variable_dimension_keys = list(variable_names[variable_name].keys())
 
+    # Get the variable's iterable dimension keys and their axis lengths (axes other than 'lon' and 'lat')
+    iterable_dimension_mask = ~np.isin(list(variable_dims), ['lon', 'lat'])
+    iterable_dimension_keys = np.array(list(variable_dims))[iterable_dimension_mask]
+    iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
+    iterable_dimension_iter = np.array(np.shape(variable_array))[iterable_dimension_idxs]
+
+    print('its')
+    print('keys: ', iterable_dimension_keys)
+    print('idxs: ', iterable_dimension_idxs)
+    print('iter: ', iterable_dimension_iter)
+
     # Slice the variable along desired dimensions, i.e., month 3, layer 1, etc.
-    key_labels = []
-    for var_dim_key in variable_dimension_keys:
-        slice_index = variable_names[variable_name][var_dim_key]
-        variable_array = variable_array[slice_index]
-        key_labels.append(keyval2keylabel(var_dim_key, slice_index))  # Labels describing the slices, for plotting
-    variable_array = np.transpose(variable_array)
+    #key_labels = []
+    #for var_dim_key in variable_dimension_keys:
+    #for var_dim_key in iterable_dimension_keys:
+    #    slice_index = variable_names[variable_name][var_dim_key]
+    #    #print(var_dim_key, slice_index)
+    #    variable_array = variable_array[slice_index]
+    #    key_labels.append(keyval2keylabel(var_dim_key, slice_index))  # Labels describing the slices, for plotting
+    #variable_array = np.transpose(variable_array)
 
-    # Make an empty world map
-    fig, ax = mapJULES.world_map(lats, lons)
+    indices = generate_indices(list(iterable_dimension_iter))
+    for combo in indices:
+        #print(combo)
+        #print(iterable_dimension_idxs)
+        key_labels = []
+        variable_array2 = np.copy(variable_array)
+        count = 0
+        print('init shape: ', np.shape(variable_array2))
+        for var_dim_key, slice_index, slice_val in zip(iterable_dimension_keys, iterable_dimension_idxs, combo):
+            print(var_dim_key, slice_index, slice_val)
+            variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
+            print('reshaped: ', np.shape(variable_array2))
+            key_labels.append(keyval2keylabel(var_dim_key, slice_val))
+            count += 1
+        #stop
+        print(key_labels)
+        print(' ')
+        variable_array2 = np.transpose(variable_array2)
 
-    lat1, lat2, lon1, lon2 = -10, 15, -15, 50
+        # Make an empty world map
+        fig, ax = mapJULES.world_map(lats, lons)
 
-    # Overlay the sliced variable with contours
-    mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap)
+        lat1, lat2, lon1, lon2 = -10, 15, -15, 50
 
-    areal_mean = processJULES.areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2)
+        print(np.shape(variable_array2))
 
-    # Save the final map to the workspace directory
-    translation_table = str.maketrans({char: "" for char in "[]',."})
-    cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_")
-    plt.savefig(outp_path + variable_name + '_' + cleaned_text + '.png')
+        # Overlay the sliced variable with contours
+        mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, cmap)
+
+        areal_mean = processJULES.areal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2)
+
+        # Save the final map to the workspace directory
+        translation_table = str.maketrans({char: "" for char in "[]',."})
+        cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_")
+        os.makedirs(outp_path + 'output', exist_ok=True)
+        os.makedirs(outp_path + 'output/' + variable_name, exist_ok=True)
+        print('plot')
+        plt.savefig(outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '_test.png')
 
 #plt.show()
