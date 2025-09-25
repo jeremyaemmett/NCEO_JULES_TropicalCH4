@@ -1,22 +1,19 @@
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import pandas as pd
 import processJULES
 import numpy as np
 import readJULES
 import mapJULES
 import warnings
+import miscOPS
 import os
 
 
-def keyval2keylabel(keyname, keyval):
-
-    if keyname == 'time': labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    if keyname == 'pool': labels = ['DPM', 'RPM', 'Micro. Bio', 'Humus']
-    if keyname == 'soil': labels = ['0-0.1 m', '0.1-0.35 m', '0.35-1.0 m', '1.0-2.0 m']
-    if keyname == 'pft':  labels = ['pft1', 'pft2', 'pft3', 'pft4', 'pft5', 'pft6', 'pft7', 'pft8', 'pft9', 'pft10', 'pft11', 'pft12', 'pft13']
-
-    key_label = labels[keyval]
-
-    return key_label
+# JULES output file path/name
+data_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
+outp_path = '/Users/jae35/Documents/nceo/'
+file_name = 'u-ck843_preprocessed.nc'
 
 
 def generate_indices(shape):
@@ -28,95 +25,172 @@ def generate_indices(shape):
     return [(i,) + r for i in range(shape[0]) for r in rest]
 
 
-# JULES output file path/name
-data_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
-outp_path = '/Users/jae35/Documents/nceo/'
-file_name = 'u-ck843_preprocessed.nc'
+def remove_parenthetical_substrings(s):
+    r, skip = [], 0
+    for c in s:
+        if c=='(': skip+=1; r.append(' ') if skip==1 else None
+        elif c==')' and skip>0: skip-=1
+        elif skip==0: r.append(c)
+    return ''.join(r)
 
-dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
 
-#readJULES.get_variable_details(variables, data_path, file_name)
+def make_maps():
 
-# Variable(s) to visualize
-variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb']
+    # Clear all .txt files in the output path
+    [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(outp_path) for f in fn if f.endswith('.txt')]
 
-cmap = 'inferno'
-year = 2016
+    dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
+    #readJULES.get_variable_details(variables, data_path, file_name)
 
-# Time, its full array
-times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
-# Get the time dimension indices that fall within the desired year
-year_indices = np.where((times >= np.datetime64(f'{year}-01-01')) & (times < np.datetime64(f'{year + 1}-01-01')))[0]
+    # Variable(s) to map
+    variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb']
+    year = 2016
 
-# Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
-lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, 'lat')
-lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, 'lon')
-lon2d, lat2d = np.meshgrid(lons, lats)
+    # Full 'time' array
+    times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
+    # Get the time dimension indices that fall within the desired year
+    year_indices = np.where((times >= np.datetime64(f'{year}-01-01')) & (times < np.datetime64(f'{year + 1}-01-01')))[0]
 
-for variable_name in variable_names:
+    # Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, 'lat')
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, 'lon')
+    lon2d, lat2d = np.meshgrid(lons, lats)
 
-    # Variable to plot, its full array
-    variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
-    variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
+    for variable_name in variable_names:
 
-    print(variable_name, np.shape(variable_array))
+        # Variable to plot, its full array
+        variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
+        variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
 
-    # If the variable has a 'time' axis, trim it along the time axis to the desired year
-    if 'time' in variable_dims:
-        time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
-        variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
+        print(variable_name, np.shape(variable_array))
 
-    # Get the variable's dimension keys and values, for slicing
-    #variable_dimension_keys = list(variable_names[variable_name].keys())
+        # If the variable has a 'time' axis, trim it along the time axis to the desired year
+        if 'time' in variable_dims:
+            time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
+            variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
 
-    # Get the variable's iterable dimension keys and their axis lengths (axes other than 'lon' and 'lat')
-    iterable_dimension_mask = ~np.isin(list(variable_dims), ['lon', 'lat'])
-    iterable_dimension_keys = np.array(list(variable_dims))[iterable_dimension_mask]
-    iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
-    iterable_dimension_iter = np.array(np.shape(variable_array))[iterable_dimension_idxs]
+        # Boolean mask to indicate which variable array axes contain non-lat/lon data
+        # Example: [True True False False] indicates that axes 0 and 1 contain non-lat/lon data.
+        iterable_dimension_mask = ~np.isin(list(variable_dims), ['lon', 'lat'])
 
-    print('its')
-    print('keys: ', iterable_dimension_keys)
-    print('idxs: ', iterable_dimension_idxs)
-    print('iter: ', iterable_dimension_iter)
+        # Array providing the labels (keys) of the non-lat/lon axes
+        # Example: ['time' 'soil'] indicates that the array contains 'time' (month) and 'soil' (depth) data
+        iterable_dimension_keys = np.array(list(variable_dims))[iterable_dimension_mask]
 
-    indices = generate_indices(list(iterable_dimension_iter))
-    for combo in indices:
-        #print(combo)
-        #print(iterable_dimension_idxs)
-        key_labels = []
-        variable_array2 = np.copy(variable_array)
-        count = 0
-        print('init shape: ', np.shape(variable_array2))
-        for var_dim_key, slice_index, slice_val in zip(iterable_dimension_keys, iterable_dimension_idxs, combo):
-            print(var_dim_key, slice_index, slice_val)
-            variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
-            print('reshaped: ', np.shape(variable_array2))
-            key_labels.append(keyval2keylabel(var_dim_key, slice_val))
-            count += 1
-        #stop
-        print(key_labels)
-        print(' ')
-        variable_array2 = np.transpose(variable_array2)
+        # Array providing the indices of the non-lat/lon variable axes
+        # Example: [0 1] indicates that 'time' is contained in the 0th index, 'soil' in the 1st
+        iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
 
-        # Make an empty world map
-        fig, ax = mapJULES.world_map(lats, lons)
+        # Array providing the the number of dimensions along each non-lat/lon axis
+        # Example: [12 4] indicates that 'time' has 12 values and 'soil' has 4 values
+        iterable_dimension_iter = np.array(np.shape(variable_array))[iterable_dimension_idxs]
 
-        lat1, lat2, lon1, lon2 = -10, 15, -15, 50
+        # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
+        # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
+        indices = miscOPS.generate_indices(list(iterable_dimension_iter))
+        
+        # Loop through each tuple (slice combo). Each combo makes a unique map.
+        for combo in indices:
 
-        print(np.shape(variable_array2))
+            key_labels = [str(year)]
+            variable_array2 = np.copy(variable_array)
+            count = 0
 
-        # Overlay the sliced variable with contours
-        mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, cmap, variable_global_min, variable_global_max)
+            # Loop through each element of the tuple to perform a slice
+            for var_dim_key, slice_index, slice_val in zip(iterable_dimension_keys, iterable_dimension_idxs, combo):
 
-        areal_mean = processJULES.areal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2)
+                # Slice the array along its 'slice_index'-count axis and 'slice_val' dimension
+                # The '-count' is necessary because the array's dimension shrinks by one dimension with each slice
+                variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
 
-        # Save the final map to the workspace directory
-        translation_table = str.maketrans({char: "" for char in "[]',."})
-        cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_")
-        os.makedirs(outp_path + 'output', exist_ok=True)
-        os.makedirs(outp_path + 'output/' + variable_name, exist_ok=True)
-        print('plot')
-        plt.savefig(outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '_test.png')
+                # Append the label for file-naming purposes
+                key_labels.append("("+str(slice_val)+")" + processJULES.keyval2keylabel(var_dim_key, slice_val))
+                count += 1
 
-#plt.show()
+            sub_folder = key_labels[-1].replace(".", "p").replace(" ", "") if len(key_labels) > 2 else None
+
+            # Transpose to match the lat/lon meshgrid shape
+            variable_array2 = np.transpose(variable_array2)
+
+            # Make an empty world map
+            fig, ax = mapJULES.world_map(lats, lons)
+
+            # Overlay the sliced variable with contours
+            mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
+
+            # Compute an areal mean within a desired min, max-latitude and min, max-longitude range
+            areal_mean = processJULES.areal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
+
+            # Clean up strings
+            translation_table = str.maketrans({char: "" for char in "[]',"})
+            cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_").replace(".", "p")
+
+            # Make an output folder and a variable folder inside the output folder
+            os.makedirs(outp_path + 'output', exist_ok=True)
+            os.makedirs(outp_path + 'output/' + variable_name, exist_ok=True)
+
+            # Make a sub-folder within the variable folder, if the variable has another non-lat/lon dimension besides 'time'
+            if sub_folder != None: os.makedirs(outp_path + 'output/' + variable_name + '/' + sub_folder, exist_ok=True)
+
+            # Save plots and files in their end-point folder
+            if sub_folder != None: 
+                with open(outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
+                plt.savefig(outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + cleaned_text + '.png')
+            else: 
+                with open(outp_path + 'output/' + variable_name + '/' + variable_name + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
+                plt.savefig(outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '.png')
+
+    #plt.show()
+
+make_maps()
+
+def make_tseries():
+
+    dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
+
+    grouped = {}
+    grouped_files = {}
+
+    files = [os.path.join(r, f) for r, _, fs in os.walk(outp_path) for f in fs if f.endswith('.txt')]
+
+    for f in files:
+        parts = os.path.normpath(f).split(os.sep)
+        try:
+            i = parts.index('output')
+            after = parts[i+1:-1]
+            key = after[0] if len(after) <= 1 else after[-2]
+        except ValueError:
+            key = os.path.basename(os.path.dirname(f))
+        
+        grouped.setdefault(key, []).append(pd.read_csv(f, header=None)[0].tolist())
+        grouped_files.setdefault(key, []).append(f)
+
+    cmap = cm.get_cmap('magma')
+
+    for k in grouped:
+        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, k)
+        fig, ax = plt.subplots(figsize=(8, 4))
+        n = len(grouped[k])
+        for i, (series, fpath) in enumerate(zip(grouped[k], grouped_files[k])):
+            label = miscOPS.remove_parenthetical_substrings(os.path.basename(os.path.dirname(fpath))).replace("p",".")
+            color = cmap(i / max(n - 1, 1))  # normalize i to [0,1]
+            ax.plot(series, alpha=0.7, label=label, linewidth=3.0, color=color)
+        k_escaped = k.replace('_', r'\_')
+        ax.set_title(rf"$\mathbf{{{k_escaped}}}$" + "  (area-weighted mean)")
+        ax.set_xticks(range(12))
+        ax.set_xticklabels(['JanFebMarAprMayJunJulAugSepOctNovDec'[i*3:i*3+3] for i in range(12)], fontsize=12)
+        ax.set_ylabel(k_unit, fontsize=12)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend(edgecolor='gainsboro', facecolor='gainsboro', fontsize=10)
+        ax.set_facecolor('gainsboro')
+        ax.grid(True)
+        
+        out_dir = os.path.dirname(grouped_files[k][0])
+        out_path = os.path.join(out_dir, f"plot_{k}.png")
+        plt.savefig(out_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+make_tseries()
+
+

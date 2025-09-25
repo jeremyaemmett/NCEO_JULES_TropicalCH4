@@ -2,6 +2,7 @@ import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import numpy as np
+import miscOPS
 
 
 def world_map(lats, lons):
@@ -32,7 +33,8 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     c = ax.contourf(lon2d, lat2d, variable_array,
                     levels=np.linspace(variable_global_min, variable_global_max, 20), cmap=cmap, transform=ccrs.PlateCarree())
     cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
-    cb.set_label(variable_unit)
+    cb.set_label(variable_unit, fontsize=12)
+    cb.ax.tick_params(labelsize=12)
     #ax.set_title(variable_name + ': \n' + variable_long_name, fontstyle='italic', fontweight='bold')
     if len(variable_name.split('_')) > 1:
         variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1]
@@ -41,7 +43,8 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     subtitle = ''
     for key in key_labels:
         subtitle += key + '  '
-    ax.set_title(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name + '\n' + subtitle)
+    ax.set_title(miscOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=14)
+    ax.text(np.min(lon2d)-1, np.min(lat2d)-1, miscOPS.remove_parenthetical_substrings(subtitle), fontsize=14, color='black', ha='left', va='bottom', style='italic')
 
 
 def latlon2area(lats, lons, latitude, longitude):
