@@ -25,7 +25,13 @@ def make_maps():
     #readJULES.get_variable_details(variables, data_path, file_name)
 
     # Variable(s) to map
-    variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'lw_net', 'sw_net', 't1p5m_gb', 'q1p5m_gb', 'latent_heat', 'lw_up', 'rad_net', 'alb_land']
+    variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'lw_net', 'sw_net', 
+                      't1p5m_gb', 'q1p5m_gb', 'latent_heat', 'lw_up', 'rad_net', 'albedo_land',
+                      'runoff', 'surf_roff', 'rflow', 'fqw', 'fsat', 'fwetl', 'lw_down', 'sw_down',
+                      'precip', 'ls_rain', 'pstar', 'qw1', 'tl1', 'u1', 'v1', 'co2_mmr', 'albsoil',
+                      'b', 'fexp', 'hcap', 'hcon', 'satcon', 'sathh', 'sm_crit', 'sm_sat', 'sm_wilt',
+                      'ti_mean', 'ti_sig']
+    #variable_names = ['rad_net']
     year = 2016
 
     # Full 'time' array
@@ -42,6 +48,17 @@ def make_maps():
 
         # Variable to plot, its full array
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
+
+        variable_array = miscOPS.sanitize_extreme_values(variable_array)
+        
+        #if variable_name == 'rad_net':
+        #    flattened = variable_array.flatten()
+        #    flattened_clean = flattened[np.isfinite(flattened)]
+        #    hist_values, bin_edges = np.histogram(flattened_clean, bins=30)
+        #    print(hist_values, bin_edges)
+        #    print(flattened)
+        #    stop
+
         #variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
         variable_global_min, variable_global_max = miscOPS.globalMinMax(variable_array, variable_unit)
 
@@ -99,6 +116,9 @@ def make_maps():
             # Make an empty world map
             fig, ax = mapJULES.world_map(lats, lons)
 
+            print(variable_name)
+            flattened = variable_array.flatten()
+            print(np.nanmin(flattened), np.nanmax(flattened))
             # Overlay the sliced variable with contours
             mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
 

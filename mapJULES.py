@@ -95,7 +95,7 @@ def latlon2area(lats, lons, latitude, longitude):
 
 def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):
 
-    """Mask meshgridded latitudes and longitudes to flag those lying within a specified box-shaped region
+    """Mask mesh-gridded latitudes and longitudes to flag those lying within a specified box-shaped region
     Args:
         lat2d / lon2d (float): 2D meshgrids of latitude / longitude coordinates
         lat1 / lat2 (float):  Latitude range minimum / maximum (for averaging)

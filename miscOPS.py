@@ -72,4 +72,28 @@ def globalMinMax(variable_array, variable_unit):
     variable_global_min = np.nanmin(variable_array) if variable_unit != '1' else 0.0
     variable_global_max = np.nanmax(variable_array) if variable_unit != '1' else 5.0
 
+    variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
+
+    if variable_global_min == 0.0 and variable_global_max == 0.0:
+        variable_global_min, variable_global_max = 0.0, 1.0
+
+    if variable_global_min == 1.0 and variable_global_max == 1.0:
+        variable_global_min, variable_global_max = 0.0, 1.0
+
     return variable_global_min, variable_global_max
+
+
+def sanitize_extreme_values(arr, min_valid=-1e10, max_valid=1e10):
+    """
+    Replaces extreme values in any N-dimensional NumPy array with NaN,
+    while preserving the original shape.
+
+    NaNs already in the array are untouched.
+    """
+    # Create a copy to avoid modifying original array
+    arr_clean = np.array(arr, dtype='float64')  # force float to support NaNs
+
+    mask = (arr_clean < min_valid) | (arr_clean > max_valid)
+    arr_clean[mask] = np.nan
+
+    return arr_clean
