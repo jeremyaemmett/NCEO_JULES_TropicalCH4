@@ -4,21 +4,18 @@ import mapJULES
 
 
 def areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
-    """Compute the area-weighted mean of map data within a specified lat/lon range
+
+    """Compute the area-weighted mean value of a mapped variable within a specified box-shaped region
     Args:
-        ax (string): Plot axis
-        variable_array (float): Array of map data
-        variable_unit (string): Physical unit of map data
-        lat2d (float): 2D meshgrid of latitude coordinates
-        lon2d (float): 2D meshgrid of longitude coordinates
-        lats (float): 1D array of latitude coordinates
-        lons (float): 1D array of longitdue coordinates
-        lat1 (float):  Latitude range minimum (for averaging)
-        lat2 (float): Latitude range maximum (for averaging)
-        lon1 (float): Longitude range minimum (for averaging)
-        lon2 (float): Longitude range maximum (for averaging)
+        ax (matplotlib.axes._axes.Axes object): Plot axis
+        variable_array (float): Mapped variable array
+        variable_unit (string): Physical unit of the mapped variable
+        lat2d / lon2d (float): 2D meshgrids of latitude / longitude coordinates
+        lats / lons (float): 1D arrays of latitude / longitude coordinates
+        lat1 / lat2 (float):  Latitude range minimum / maximum (for averaging)
+        lon1 / lon2 (float): Longitude range minimum / maximum (for averaging)
     Returns:
-        float: Area-weighted mean
+        areal_mean (float): Area-weighted mean
     """
 
     # Filter the latitudes and longitudes that lie within specified ranges

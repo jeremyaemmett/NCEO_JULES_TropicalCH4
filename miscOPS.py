@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def generate_indices(shape):
 
     print('shape: ', shape)
@@ -43,14 +46,30 @@ def keyval2keylabel(keyname, keyval):
         keyname (string): Variable key e.g. 'time'
         keyval (integer): Dimension along the key axis e.g. 2
     Returns:
-        (string): A readable/plot-able string e.g. 'Mar'
+        key_label (string): A readable/plot-able string e.g. 'Mar'
     """
 
     if keyname == 'time': labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     if keyname == 'pool': labels = ['DPM', 'RPM', 'Micro. Bio', 'Humus']
     if keyname == 'soil': labels = ['0-0.1 m', '0.1-0.35 m', '0.35-1.0 m', '1.0-2.0 m']
-    if keyname == 'pft':  labels = ['pft1', 'pft2', 'pft3', 'pft4', 'pft5', 'pft6', 'pft7', 'pft8', 'pft9', 'pft10', 'pft11', 'pft12', 'pft13']
+    if keyname == 'pft':  labels = ['BET-Tr', 'BET-Te', 'BDT', 'NET', 'NDT', 'C3G', 'C4G', 'ESh', 'DSh', 'C3Cr', 'C4Cr', 'C3Pa', 'C4Pa']
 
     key_label = labels[keyval]
 
     return key_label
+
+
+def globalMinMax(variable_array, variable_unit):
+
+    """_summary_
+    Args:
+        variable_array (_type_): _description_
+        variable_unit (_type_): _description_
+    Returns:
+        _type_: _description_
+    """
+
+    variable_global_min = np.nanmin(variable_array) if variable_unit != '1' else 0.0
+    variable_global_max = np.nanmax(variable_array) if variable_unit != '1' else 5.0
+
+    return variable_global_min, variable_global_max
