@@ -7,23 +7,26 @@ import miscOPS
 
 def world_map(lats, lons):
 
+    # Add some extra space to the map edges
     lon_min, lon_max, lat_min, lat_max = np.min(lons)-2.5, np.max(lons)+2.5, np.min(lats)-2.5, np.max(lats)+2.5
 
+    # Figure size
     scale = 0.1
     map_width, map_height = lon_max - lon_min, lat_max - lat_min
     fig_width, fig_height = map_width*scale, map_height*scale
-
     fig = plt.figure(figsize=(fig_width, fig_height))
-    #ax = plt.axes(projection=ccrs.Robinson())
-    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # Projection
+    ax = plt.axes(projection=ccrs.PlateCarree())  # Use Robinson() for full-globe
     ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+
+    # Topography, details
     ax.coastlines()
     ax.add_feature(cfeature.LAND, facecolor='lightgray')
     ax.add_feature(cfeature.OCEAN, facecolor='white')
     gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
     gl.top_labels = False
     gl.right_labels = False
-    #ax.set_global()
 
     return fig, ax
 
@@ -35,14 +38,12 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
     cb.set_label(variable_unit, fontsize=12)
     cb.ax.tick_params(labelsize=12)
-    #ax.set_title(variable_name + ': \n' + variable_long_name, fontstyle='italic', fontweight='bold')
-    if len(variable_name.split('_')) > 1:
-        variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1]
-    else:
-        variable_name_fix = variable_name
+
+    variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1] if len(variable_name.split('_')) > 1 else variable_name
+
     subtitle = ''
-    for key in key_labels:
-        subtitle += key + '  '
+    for key in key_labels: subtitle += key + '  '
+    
     ax.set_title(miscOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=14)
     ax.text(np.min(lon2d)-1, np.min(lat2d)-1, miscOPS.remove_parenthetical_substrings(subtitle), fontsize=14, color='black', ha='left', va='bottom', style='italic')
 
@@ -69,11 +70,9 @@ def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):
     lat_min, lat_max = min(lat1, lat2), max(lat1, lat2)
     lon_min, lon_max = min(lon1, lon2), max(lon1, lon2)
 
-    # Build mask for points INSIDE the bounding box
-    inside_mask = (
-        (lat2d >= lat_min) & (lat2d <= lat_max) &
-        (lon2d >= lon_min) & (lon2d <= lon_max)
-    )
+    # Build mask for points inside the bounding box
+    inside_mask = ((lat2d >= lat_min) & (lat2d <= lat_max) &
+                   (lon2d >= lon_min) & (lon2d <= lon_max))
 
     # Set values OUTSIDE the bounding box to NaN
     lat2d_masked = np.where(inside_mask, lat2d, np.nan)

@@ -16,24 +16,6 @@ outp_path = '/Users/jae35/Documents/nceo/'
 file_name = 'u-ck843_preprocessed.nc'
 
 
-def generate_indices(shape):
-
-    if not shape:
-        return [()]
-    
-    rest = generate_indices(shape[1:])
-    return [(i,) + r for i in range(shape[0]) for r in rest]
-
-
-def remove_parenthetical_substrings(s):
-    r, skip = [], 0
-    for c in s:
-        if c=='(': skip+=1; r.append(' ') if skip==1 else None
-        elif c==')' and skip>0: skip-=1
-        elif skip==0: r.append(c)
-    return ''.join(r)
-
-
 def make_maps():
 
     # Clear all .txt files in the output path
@@ -87,6 +69,7 @@ def make_maps():
 
         # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
         # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
+        print('test test: ', list(iterable_dimension_iter))
         indices = miscOPS.generate_indices(list(iterable_dimension_iter))
         
         # Loop through each tuple (slice combo). Each combo makes a unique map.
@@ -104,7 +87,7 @@ def make_maps():
                 variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
 
                 # Append the label for file-naming purposes
-                key_labels.append("("+str(slice_val)+")" + processJULES.keyval2keylabel(var_dim_key, slice_val))
+                key_labels.append("("+str(slice_val)+")" + miscOPS.keyval2keylabel(var_dim_key, slice_val))
                 count += 1
 
             sub_folder = key_labels[-1].replace(".", "p").replace(" ", "") if len(key_labels) > 2 else None
