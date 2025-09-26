@@ -25,7 +25,7 @@ def make_maps():
     #readJULES.get_variable_details(variables, data_path, file_name)
 
     # Variable(s) to map
-    variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb']
+    variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'lw_net', 'sw_net', 't1p5m_gb', 'q1p5m_gb', 'latent_heat', 'lw_up', 'rad_net', 'alb_land']
     year = 2016
 
     # Full 'time' array
@@ -42,7 +42,8 @@ def make_maps():
 
         # Variable to plot, its full array
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
-        variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
+        #variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
+        variable_global_min, variable_global_max = miscOPS.globalMinMax(variable_array, variable_unit)
 
         print(variable_name, np.shape(variable_array))
 
@@ -171,6 +172,7 @@ def make_tseries():
         
         out_dir = os.path.dirname(grouped_files[k][0])
         out_path = os.path.join(out_dir, f"plot_{k}.png")
+        print('fig saved to: ', out_path)
         plt.savefig(out_path, dpi=300, bbox_inches='tight')
         plt.close()
 

@@ -7,6 +7,15 @@ import miscOPS
 
 def world_map(lats, lons):
 
+    """Create a world map, given latitude and longitude coordinates
+    Args:
+        lats (float): 1D array of latitude coordinates
+        lons (float): 1D array of longitude coordinates
+    Returns:
+        fig (matplotlib.figure.Figure object): A matplotlib figure
+        ax (matplotlib.axes._axes.Axes object): A matplotlib axis
+    """
+
     # Add some extra space to the map edges
     lon_min, lon_max, lat_min, lat_max = np.min(lons)-2.5, np.max(lons)+2.5, np.min(lats)-2.5, np.max(lats)+2.5
 
@@ -33,6 +42,18 @@ def world_map(lats, lons):
 
 def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap, variable_global_min, variable_global_max):
 
+    """Overplot, onto an empty map, filled contours and a colorbar to display a mapped variable
+    Args:
+        ax (matplotlib.axes._axes.Axes object): Plot axis
+        lat2d / lon2d (float): 2D meshgrids of latitude / longitude coordinates
+        variable_name / variable_long_name (string): Short name / Long name of the mapped variable
+        variable_array (float): Mapped variable array
+        variable_unit (string): Physical unit of the mapped variable
+        key_labels (_type_): Descriptive labels for the mapped variable's dimensions
+        cmap (matplotlib.colors.Colormap object): Colormap name
+        variable_global_min / variable_global_max (float): Fixed minimum / maximum contour levels for the mapped variable
+    """
+
     c = ax.contourf(lon2d, lat2d, variable_array,
                     levels=np.linspace(variable_global_min, variable_global_max, 20), cmap=cmap, transform=ccrs.PlateCarree())
     cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
@@ -50,6 +71,14 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
 
 def latlon2area(lats, lons, latitude, longitude):
 
+    """_summary_
+    Args:
+        lats / lons (float): 1D arrays of latitude / longitude coordinates
+        latitude / longitude (float): latitude / longitude where area is desired
+    Returns:
+        box_area (float): Surface area of the gridbox centered on latitude / longitude
+    """
+
     # Determine the spacing of latitude and longitude grid cells (degrees)
     lat_sep, lon_sep = np.diff(lats)[0], np.diff(lons)[0]
 
@@ -65,6 +94,16 @@ def latlon2area(lats, lons, latitude, longitude):
 
 
 def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):
+
+    """Mask meshgridded latitudes and longitudes to flag those lying within a specified box-shaped region
+    Args:
+        lat2d / lon2d (float): 2D meshgrids of latitude / longitude coordinates
+        lat1 / lat2 (float):  Latitude range minimum / maximum (for averaging)
+        lon1 / lon2 (float): Longitude range minimum / maximum (for averaging)
+    Returns:
+        lat2d_masked / lon2d_masked (boolean): Arrays flagging which meshgridded latitudes,
+            and which meshgridded longitudes, lie within a specified box-shaped region
+    """
 
     # Ensure correct min/max in case lat1 > lat2 or lon1 > lon2
     lat_min, lat_max = min(lat1, lat2), max(lat1, lat2)
