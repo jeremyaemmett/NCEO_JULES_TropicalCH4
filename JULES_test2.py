@@ -132,11 +132,14 @@ def make_tseries():
     grouped = {}
     grouped_files = {}
 
+    # Make a list of every t-series file across all of the input variables
     files = [os.path.join(r, f) for r, _, fs in os.walk(outp_path) for f in fs if f.endswith('.txt')]
-
     files = miscOPS.filter_strings_by_substrings(files, variable_names)
 
+    # Loop through every t-series file
     for f in files:
+
+        # Recover the variable name from the file path
         parts = os.path.normpath(f).split(os.sep)
         try:
             i = parts.index('output')
@@ -145,24 +148,21 @@ def make_tseries():
         except ValueError:
             key = os.path.basename(os.path.dirname(f))
         
+        # Group the t-series file paths by their variables: Dictionary with {variable1: [t-series list], variable2: [t-series list]}
         grouped.setdefault(key, []).append(pd.read_csv(f, header=None)[0].tolist())
         grouped_files.setdefault(key, []).append(f)
 
     cmap = colormaps['magma']
 
+    # Loop through each variable in the grouped dictionary
     for k in grouped:
+
+        # Recover variable metadata, particuarly the unit
         k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, k)
+
+        # T-series plot prep.
         fig, ax = plt.subplots(figsize=(8, 4))
-        n = len(grouped[k])
-        for i, (series, fpath) in enumerate(zip(grouped[k], grouped_files[k])):
-            final_directory_path = '/'.join(fpath.split('/')[0:-1])
-            print('save here: ', final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif')
-            miscOPS.pngs_to_gif(final_directory_path, final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif', duration=150, smooth=True, exclude_substr='plot_')
-            label = miscOPS.remove_parenthetical_substrings(os.path.basename(os.path.dirname(fpath))).replace("p",".")
-            color = cmap(i / max(n - 1, 1))  # normalize i to [0,1]
-            ax.plot(series, alpha=0.7, label=label, linewidth=3.0, color=color)
-        k_escaped = k.replace('_', r'\_')
-        ax.set_title(rf"$\mathbf{{{k_escaped}}}$" + "  (area-weighted mean)")
+        ax.set_title(rf"$\mathbf{{{k.replace('_', r'\_')}}}$" + "  (area-weighted mean)")
         ax.set_xticks(range(12))
         ax.set_xticklabels(['JanFebMarAprMayJunJulAugSepOctNovDec'[i*3:i*3+3] for i in range(12)], fontsize=12)
         ax.set_ylabel(k_unit, fontsize=12)
@@ -171,13 +171,29 @@ def make_tseries():
         ax.legend(edgecolor='gainsboro', facecolor='gainsboro', fontsize=10)
         ax.set_facecolor('gainsboro')
         ax.grid(True)
+
+        # For the current variable, loop through all of its t-series arrays (and their file paths)
+        for i, (series, fpath) in enumerate(zip(grouped[k], grouped_files[k])):
+
+            # Get the name of the end-directory for the current t-series, so the code remembers where it belongs in the tree
+            final_directory_path = '/'.join(fpath.split('/')[0:-1])
+            print('save here: ', final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif')
+
+            # While we know the end-directory, we might as well make an animated gif of the monthly maps, using all the existing png's
+            miscOPS.pngs_to_gif(final_directory_path, final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif', duration=150, smooth=True, exclude_substr='plot_')
+
+            # Plot the t-series, colored to differentiate it from other t-series belonging to the variable
+            label = miscOPS.remove_parenthetical_substrings(os.path.basename(os.path.dirname(fpath))).replace("p",".")
+            color = cmap(i / max(len(grouped[k]) - 1, 1))
+            ax.plot(series, alpha=0.7, label=label, linewidth=3.0, color=color)
         
+        # Save the plot in the variable's main directory
         out_dir = outp_path + 'output/' + k
-        print('k: ', k)
         out_path = os.path.join(out_dir, f"plot_{k}.png")
-        print('fig saved to: ', out_path)
         plt.savefig(out_path, dpi=300, bbox_inches='tight')
         plt.close()
+        print('fig saved to: ', out_path)
+        
 
 #make_maps()
 make_tseries()
