@@ -66,7 +66,7 @@ def get_variable_details(variables, data_path, file_name):
         # Variable to plot, its full array
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
 
-        print2terminal = True
+        print2terminal = False
 
         if print2terminal:
             print(variable_name)

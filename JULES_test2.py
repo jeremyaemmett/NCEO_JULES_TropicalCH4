@@ -1,19 +1,20 @@
+from matplotlib import colormaps
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 import pandas as pd
 import processJULES
 import numpy as np
+import plotPARAMS
 import readJULES
 import mapJULES
 import warnings
 import miscOPS
 import os
 
-
 # JULES output file path/name
-data_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
-outp_path = '/Users/jae35/Documents/nceo/'
-file_name = 'u-ck843_preprocessed.nc'
+data_path, outp_path, file_name = plotPARAMS.data_path, plotPARAMS.outp_path, plotPARAMS.file_name
+
+# Variable(s) and year to map
+variable_names, year = plotPARAMS.variable_names, plotPARAMS.year
 
 
 def make_maps():
@@ -23,16 +24,6 @@ def make_maps():
 
     dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
     #readJULES.get_variable_details(variables, data_path, file_name)
-
-    # Variable(s) to map
-    variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'lw_net', 'sw_net', 
-                      't1p5m_gb', 'q1p5m_gb', 'latent_heat', 'lw_up', 'rad_net', 'albedo_land',
-                      'runoff', 'surf_roff', 'rflow', 'fqw', 'fsat', 'fwetl', 'lw_down', 'sw_down',
-                      'precip', 'ls_rain', 'pstar', 'qw1', 'tl1', 'u1', 'v1', 'co2_mmr', 'albsoil',
-                      'b', 'fexp', 'hcap', 'hcon', 'satcon', 'sathh', 'sm_crit', 'sm_sat', 'sm_wilt',
-                      'ti_mean', 'ti_sig']
-    #variable_names = ['rad_net']
-    year = 2016
 
     # Full 'time' array
     times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
@@ -50,14 +41,6 @@ def make_maps():
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(data_path + file_name, variable_name)
 
         variable_array = miscOPS.sanitize_extreme_values(variable_array)
-        
-        #if variable_name == 'rad_net':
-        #    flattened = variable_array.flatten()
-        #    flattened_clean = flattened[np.isfinite(flattened)]
-        #    hist_values, bin_edges = np.histogram(flattened_clean, bins=30)
-        #    print(hist_values, bin_edges)
-        #    print(flattened)
-        #    stop
 
         #variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
         variable_global_min, variable_global_max = miscOPS.globalMinMax(variable_array, variable_unit)
@@ -87,7 +70,6 @@ def make_maps():
 
         # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
         # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
-        print('test test: ', list(iterable_dimension_iter))
         indices = miscOPS.generate_indices(list(iterable_dimension_iter))
         
         # Loop through each tuple (slice combo). Each combo makes a unique map.
@@ -116,9 +98,6 @@ def make_maps():
             # Make an empty world map
             fig, ax = mapJULES.world_map(lats, lons)
 
-            print(variable_name)
-            flattened = variable_array.flatten()
-            print(np.nanmin(flattened), np.nanmax(flattened))
             # Overlay the sliced variable with contours
             mapJULES.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
 
@@ -144,18 +123,18 @@ def make_maps():
                 with open(outp_path + 'output/' + variable_name + '/' + variable_name + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
                 plt.savefig(outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '.png')
 
+            plt.close()
+
     #plt.show()
 
-make_maps()
-
 def make_tseries():
-
-    dimensions, variables, global_attributes = readJULES.read_jules_header(data_path+file_name)
 
     grouped = {}
     grouped_files = {}
 
     files = [os.path.join(r, f) for r, _, fs in os.walk(outp_path) for f in fs if f.endswith('.txt')]
+
+    files = miscOPS.filter_strings_by_substrings(files, variable_names)
 
     for f in files:
         parts = os.path.normpath(f).split(os.sep)
@@ -169,13 +148,16 @@ def make_tseries():
         grouped.setdefault(key, []).append(pd.read_csv(f, header=None)[0].tolist())
         grouped_files.setdefault(key, []).append(f)
 
-    cmap = cm.get_cmap('magma')
+    cmap = colormaps['magma']
 
     for k in grouped:
         k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, k)
         fig, ax = plt.subplots(figsize=(8, 4))
         n = len(grouped[k])
         for i, (series, fpath) in enumerate(zip(grouped[k], grouped_files[k])):
+            final_directory_path = '/'.join(fpath.split('/')[0:-1])
+            print('save here: ', final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif')
+            miscOPS.pngs_to_gif(final_directory_path, final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif', duration=150, smooth=True, exclude_substr='plot_')
             label = miscOPS.remove_parenthetical_substrings(os.path.basename(os.path.dirname(fpath))).replace("p",".")
             color = cmap(i / max(n - 1, 1))  # normalize i to [0,1]
             ax.plot(series, alpha=0.7, label=label, linewidth=3.0, color=color)
@@ -190,12 +172,16 @@ def make_tseries():
         ax.set_facecolor('gainsboro')
         ax.grid(True)
         
-        out_dir = os.path.dirname(grouped_files[k][0])
+        out_dir = outp_path + 'output/' + k
+        print('k: ', k)
         out_path = os.path.join(out_dir, f"plot_{k}.png")
         print('fig saved to: ', out_path)
         plt.savefig(out_path, dpi=300, bbox_inches='tight')
         plt.close()
 
+#make_maps()
 make_tseries()
 
+test = outp_path + 'output/' + 'fch4_wetl'
+test2 = miscOPS.pngs_to_gif(test, 'test.gif', duration=150, smooth=True, exclude_substr='plot_')
 

@@ -1,9 +1,9 @@
+from PIL import Image
 import numpy as np
+import os
 
 
 def generate_indices(shape):
-
-    print('shape: ', shape)
 
     """Given an array shape, generate a list of tuples representing all possible
        combinations of slices through the array.
@@ -97,3 +97,81 @@ def sanitize_extreme_values(arr, min_valid=-1e10, max_valid=1e10):
     arr_clean[mask] = np.nan
 
     return arr_clean
+
+
+def filter_strings_by_substrings(input_list, substring_list):
+        
+        return [
+        string for string in input_list
+        if any(sub in string for sub in substring_list)]
+
+
+def get_month_index(filename):
+    month_map = {'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4,
+                 'May': 5, 'Jun': 6, 'Jul': 7, 'Aug': 8,
+                 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12}
+    for month in month_map:
+        if month in filename:
+            return month_map[month]
+    return 0  # Unknown months go first
+
+def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_substr=None):
+    def get_sorted_pngs(folder, exclude_substr):
+        files = [
+            f for f in os.listdir(folder)
+            if f.lower().endswith('.png') and (exclude_substr is None or exclude_substr not in f)
+        ]
+        return sorted(files, key=get_month_index)
+
+    files = get_sorted_pngs(folder, exclude_substr)
+
+    if not files:
+        raise ValueError("No PNG files found in folder.")
+
+    # Load and resize images
+    base_img = Image.open(os.path.join(folder, files[0])).convert('RGB')
+    base_size = base_img.size
+    images = [base_img]
+
+    for f in files[1:]:
+        img = Image.open(os.path.join(folder, f)).convert('RGB').resize(base_size)
+        images.append(img)
+
+    # Prepare full list of frames (including blended if smooth=True)
+    full_frames = []
+    for i, img in enumerate(images):
+        full_frames.append(img)
+        if smooth:
+            # Blend to next frame if not the last
+            if i < len(images) - 1:
+                next_img = images[i + 1]
+                for alpha in (0.33, 0.66):
+                    blended = Image.blend(img, next_img, alpha)
+                    full_frames.append(blended)
+            # ALSO, if this is the last image (December), blend back to first (January)
+            elif i == len(images) - 1:
+                first_img = images[0]
+                for alpha in (0.33, 0.66):
+                    blended = Image.blend(img, first_img, alpha)
+                    full_frames.append(blended)
+
+    # Create a global palette by merging all RGB frames into one long image
+    palette_base = Image.new('RGB', (base_size[0], base_size[1] * len(full_frames)))
+    for i, frame in enumerate(full_frames):
+        palette_base.paste(frame, (0, i * base_size[1]))
+
+    # Use this image to generate a global palette
+    palette_image = palette_base.quantize(colors=256, method=Image.MEDIANCUT)
+
+    # Apply global palette to all frames
+    paletted_frames = [frame.quantize(palette=palette_image) for frame in full_frames]
+
+    # Save to GIF
+    paletted_frames[0].save(
+        out,
+        save_all=True,
+        append_images=paletted_frames[1:],
+        duration=duration,
+        loop=0
+    )
+
