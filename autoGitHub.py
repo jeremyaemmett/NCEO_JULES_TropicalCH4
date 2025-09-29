@@ -10,4 +10,4 @@ def push2GitHub(message):
     os.system(f'git commit -m "{message}"')
     os.system("git push -u origin main")
 
-push2GitHub('added animated map')
+push2GitHub('commented JULES_test2.py, before trying a loop-version of the t-series function')
