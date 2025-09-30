@@ -1,4 +1,5 @@
 from PIL import Image
+import pandas as pd
 import numpy as np
 import os
 
@@ -116,15 +117,27 @@ def get_month_index(filename):
     return 0  # Unknown months go first
 
 def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_substr=None):
+
     def get_sorted_pngs(folder, exclude_substr):
+        def sort_key(name):
+            num = ''
+            for c in name:
+                if c.isdigit():
+                    num += c
+            return int(num) if num else -1  # sort purely by number
+
         files = [
             f for f in os.listdir(folder)
-            if f.lower().endswith('.png') and (exclude_substr is None or exclude_substr not in f)
+            if f.lower().endswith('.png') and (
+                exclude_substr is None or 
+                not any(sub in f for sub in exclude_substr)
+            )
         ]
-        return sorted(files, key=get_month_index)
+        return sorted(files, key=sort_key)
 
     files = get_sorted_pngs(folder, exclude_substr)
-
+    print('sorted files: ', files)
+    
     if not files:
         raise ValueError("No PNG files found in folder.")
 
@@ -167,11 +180,66 @@ def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_subst
     paletted_frames = [frame.quantize(palette=palette_image) for frame in full_frames]
 
     # Save to GIF
-    paletted_frames[0].save(
-        out,
-        save_all=True,
-        append_images=paletted_frames[1:],
-        duration=duration,
-        loop=0
-    )
+    print('saving to: ', out)
+    paletted_frames[0].save(out, save_all=True, append_images=paletted_frames[1:], duration=duration, loop=0)
+
+
+def discover_files(root_path, end_string):
+
+    # Make a list of every t-series file across all of the input variables
+    files = [os.path.join(r, f) for r, _, fs in os.walk(root_path) for f in fs if f.endswith(end_string)]
+
+    return files
+    
+    
+def group_file_names_by_end_directory(file_names):
+
+    # Loop through every t-series file
+    grouped_files = {}
+    for f in file_names:
+
+        # Recover the variable name from the file path
+        parts = os.path.normpath(f).split(os.sep)
+ 
+        try:
+            i = parts.index('output')
+            after = parts[i+1:-1]
+            key = after[0] if len(after) <= 1 else after[-2]
+        except ValueError:
+            key = os.path.basename(os.path.dirname(f))
+            
+        # Group the t-series file paths by their variables: Dictionary with {variable1: [t-series list], variable2: [t-series list]}
+        grouped_files.setdefault(key, []).append(f)
+
+    return grouped_files
+        
+
+def group_file_contents_by_end_directory(file_names):
+
+    # Loop through every t-series file
+    grouped = {}
+    for f in file_names:
+
+        # Recover the variable name from the file path
+        parts = os.path.normpath(f).split(os.sep)
+
+        try:
+            i = parts.index('output')
+            after = parts[i+1:-1]
+            key = after[0] if len(after) <= 1 else after[-2]
+        except ValueError:
+            key = os.path.basename(os.path.dirname(f))
+            
+        # Group the t-series file paths by their variables: Dictionary with {variable1: [t-series list], variable2: [t-series list]}
+        grouped.setdefault(key, []).append(pd.read_csv(f, header=None)[0].tolist())
+
+    return grouped
+
+
+def get_unique_end_directories(file_paths):
+    end_dirs = set()
+    for path in file_paths:
+        dir_path = os.path.dirname(os.path.abspath(path))  # Get full absolute dir path
+        end_dirs.add(dir_path)
+    return sorted(end_dirs)  # Optional: sorted for consistent order
 

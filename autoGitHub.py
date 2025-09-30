@@ -10,4 +10,4 @@ def push2GitHub(message):
     os.system(f'git commit -m "{message}"')
     os.system("git push -u origin main")
 
-push2GitHub('day-end commit')
+push2GitHub('added animated tseries function, starting to cleanup functions, needs formatting touches')
