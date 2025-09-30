@@ -167,7 +167,7 @@ def make_tseries():
         ax.set_title(rf"$\mathbf{{{k.replace('_', r'\_')}}}$" + "  (area-weighted mean)")
         ax.set_xticks(range(12))
         ax.set_xticklabels(['JanFebMarAprMayJunJulAugSepOctNovDec'[i*3:i*3+3] for i in range(12)], fontsize=12)
-        ax.set_ylabel(k_unit, fontsize=12)
+        ax.set_ylabel(miscOPS.cleanup_exponents(k_unit), fontsize=12)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.legend(edgecolor='gainsboro', facecolor='gainsboro', fontsize=10)
@@ -263,6 +263,7 @@ def make_animated_tseries():
                 ax.plot(range(start, end), tseries_values[start:end], color=color1, alpha=0.9, linewidth=4.0)
 
             ax.legend(edgecolor='gainsboro', facecolor='gainsboro', fontsize=10)
+            ax.text(0.35, np.min(tseries_values) - 0.5*plot_margin, plotPARAMS.year, fontsize=14, color='black', ha='left', va='bottom', style='italic')
 
             plt.savefig(unique_end_directory + '/' + str(i) + '_' + 'tseries.png', dpi=300, bbox_inches='tight')
             plt.close()
@@ -270,7 +271,6 @@ def make_animated_tseries():
         miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/tseries_animation.gif', duration=150, smooth=True, exclude_substr=['map', 'complete'])
 
         [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(unique_end_directory) for f in fn if f.endswith('_tseries.png')]
-
 
 
 make_maps()

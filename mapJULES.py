@@ -54,10 +54,22 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
         variable_global_min / variable_global_max (float): Fixed minimum / maximum contour levels for the mapped variable
     """
 
+    vmin, vmax = variable_global_min, variable_global_max
+    n_levels = 10
+
+    step_raw = (vmax - vmin) / (n_levels - 1)
+    mag = 10 ** np.floor(np.log10(step_raw))
+    step = mag * (1 if step_raw/mag <= 1 else 2 if step_raw/mag <= 2 else 5)
+
+    vmin_r = np.floor(vmin / step) * step
+    vmax_r = np.ceil(vmax / step) * step
+
+    levels = np.arange(vmin_r, vmax_r + step/2, step)
+
     c = ax.contourf(lon2d, lat2d, variable_array,
-                    levels=np.linspace(variable_global_min, variable_global_max, 20), cmap=cmap, transform=ccrs.PlateCarree())
+                    levels=levels, cmap=cmap, transform=ccrs.PlateCarree())
     cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
-    cb.set_label(variable_unit, fontsize=12)
+    cb.set_label(miscOPS.cleanup_exponents(variable_unit), fontsize=12)
     cb.ax.tick_params(labelsize=12)
 
     variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1] if len(variable_name.split('_')) > 1 else variable_name
