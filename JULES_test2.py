@@ -1,9 +1,11 @@
+from scipy.interpolate import interp1d
 from matplotlib import colormaps
 import matplotlib.pyplot as plt
 import pandas as pd
 import processJULES
 import numpy as np
 import plotPARAMS
+import plotFORMAT
 import readJULES
 import mapJULES
 import warnings
@@ -118,10 +120,10 @@ def make_maps():
             # Save plots and files in their end-point folder
             if sub_folder != None: 
                 with open(outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
-                plt.savefig(outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + cleaned_text + '.png')
+                plt.savefig(outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + cleaned_text + '_map.png')
             else: 
                 with open(outp_path + 'output/' + variable_name + '/' + variable_name + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
-                plt.savefig(outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '.png')
+                plt.savefig(outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '_map.png')
 
             plt.close()
 
@@ -180,7 +182,7 @@ def make_tseries():
             print('save here: ', final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif')
 
             # While we know the end-directory, we might as well make an animated gif of the monthly maps, using all the existing png's
-            miscOPS.pngs_to_gif(final_directory_path, final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif', duration=150, smooth=True, exclude_substr='plot_')
+            #miscOPS.pngs_to_gif(final_directory_path, final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif', duration=150, smooth=True, exclude_substr='plot_')
 
             # Plot the t-series, colored to differentiate it from other t-series belonging to the variable
             label = miscOPS.remove_parenthetical_substrings(os.path.basename(os.path.dirname(fpath))).replace("p",".")
@@ -189,15 +191,94 @@ def make_tseries():
         
         # Save the plot in the variable's main directory
         out_dir = outp_path + 'output/' + k
-        out_path = os.path.join(out_dir, f"plot_{k}.png")
+        out_path = os.path.join(out_dir, f"tseries_complete_{k}.png")
         plt.savefig(out_path, dpi=300, bbox_inches='tight')
         plt.close()
         print('fig saved to: ', out_path)
+
+
+def make_animated_maps():
+
+    # Make a list of every t-series file across all of the input variables
+    files = miscOPS.discover_files(outp_path, '_map.png')
+
+    unique_end_directories = miscOPS.get_unique_end_directories(files)
+
+    for unique_end_directory in unique_end_directories:
+
+        map_files = miscOPS.discover_files(unique_end_directory, '_map.png')
         
+        #miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/' + unique_end_directory.split('/')[-1] + '_animation.gif', duration=150, smooth=True, exclude_substr='plot_')
+        miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete'])
 
-#make_maps()
+
+def make_animated_tseries():
+
+    # Make a list of every t-series file across all of the input variables
+    files = miscOPS.discover_files(outp_path, 'tseries.txt')
+
+    unique_end_directories = miscOPS.get_unique_end_directories(files)
+
+    cmap = colormaps['magma']
+
+    for unique_end_directory in unique_end_directories:
+
+        tseries_file = miscOPS.discover_files(unique_end_directory, 'tseries.txt')[0]
+        tseries_values = pd.read_csv(tseries_file, header=None)[0].tolist()
+
+        # Recover the variable name from the file path
+        parts = os.path.normpath(tseries_file).split(os.sep)
+        try:
+            i = parts.index('output')
+            after = parts[i+1:-1]
+            key = after[0] if len(after) <= 1 else after[-2]
+        except ValueError:
+            key = os.path.basename(os.path.dirname(tseries_file))
+        # Recover variable metadata, particuarly the unit
+        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, key)
+
+        name1 = miscOPS.remove_parenthetical_substrings(tseries_file.split('/')[-1]).replace("_ ", " ")[0:-12]
+        name2 = name1.split(" ")[-1].replace("p", ".") if key != name1 else ""
+
+        for i in range(1, 13):
+
+            # T-series plot prep.
+            plot_margin = 0.10 * (np.max(tseries_values) - np.min(tseries_values))
+            fig, ax = plotFORMAT.tseries_axes(rf"$\mathbf{{{(key).replace('_', r'\_')}}}$" + "  (area-weighted mean)\n" + k_long_name, k_unit, tseries_values, plot_margin)
+
+            # --- Gray full curve with fading alpha ---
+            color1 = cmap((tseries_values[i-1] - np.nanmin(k_array)) / (np.nanmax(k_array - np.nanmin(k_array))))
+
+            for j in range(11):
+
+                color2 = cmap((tseries_values[j] - np.nanmin(k_array)) / (np.nanmax(k_array - np.nanmin(k_array))))
+                dist = abs((j + 0.5) - (i - 1))  # Distance from segment center to current index
+                alpha, width = max(0.1, 1.0 - dist / 2.0), max(0.1, 4.0 - dist / 3.0)
+                ax.plot([j, j + 1], [tseries_values[j], tseries_values[j + 1]], color=color2, alpha=alpha, linewidth=width)
+
+            # --- Black 3-point segment centered around i ---
+            start, end = max(0, i - 2), min(12, i - 1)
+            if end - start > 1:
+                
+                ax.plot(range(start, end), tseries_values[start:end], color=color1, alpha=0.9, linewidth=4.0)
+
+            ax.legend(edgecolor='gainsboro', facecolor='gainsboro', fontsize=10)
+
+            plt.savefig(unique_end_directory + '/' + str(i) + '_' + 'tseries.png', dpi=300, bbox_inches='tight')
+            plt.close()
+
+        miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/tseries_animation.gif', duration=150, smooth=True, exclude_substr=['map', 'complete'])
+
+        [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(unique_end_directory) for f in fn if f.endswith('_tseries.png')]
+
+
+
+make_maps()
+make_animated_maps()
+
 make_tseries()
+make_animated_tseries()
 
-test = outp_path + 'output/' + 'fch4_wetl'
-test2 = miscOPS.pngs_to_gif(test, 'test.gif', duration=150, smooth=True, exclude_substr='plot_')
+#test = outp_path + 'output/' + 'fch4_wetl'
+#test2 = miscOPS.pngs_to_gif(test, 'test.gif', duration=150, smooth=True, exclude_substr='plot_')
 
