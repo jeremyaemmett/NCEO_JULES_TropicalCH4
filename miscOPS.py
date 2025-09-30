@@ -1,4 +1,4 @@
-from PIL import Image
+from PIL import Image, ImageSequence
 import pandas as pd
 import numpy as np
 import os
@@ -137,7 +137,7 @@ def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_subst
 
     files = get_sorted_pngs(folder, exclude_substr)
     print('sorted files: ', files)
-    
+
     if not files:
         raise ValueError("No PNG files found in folder.")
 
@@ -242,4 +242,79 @@ def get_unique_end_directories(file_paths):
         dir_path = os.path.dirname(os.path.abspath(path))  # Get full absolute dir path
         end_dirs.add(dir_path)
     return sorted(end_dirs)  # Optional: sorted for consistent order
+
+
+def cleanup_exponents(text):
+
+    superscript_map = {
+        '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
+        '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
+        '-': '⁻', '+': '⁺'
+    }
+
+    def replace_exp(match):
+        base, exp = match.group(1), match.group(2)
+        # Convert each character in exp to superscript if possible
+        sup_exp = ''.join(superscript_map.get(ch, ch) for ch in exp)
+        return base + sup_exp
+
+    import re
+    # Replace 10^number pattern
+    text = re.sub(r'(10)\^([-\d]+)', replace_exp, text)
+    # Replace letter-number negative powers like m-2, s-3 etc.
+    text = re.sub(r'([a-zA-Z])([-\d]+)', replace_exp, text)
+
+    return text
+
+
+from PIL import Image, ImageSequence
+
+def combine_gifs_vertically(gif1_path, gif2_path, output_path, gif2_scale=1.0):
+    gif1 = Image.open(gif1_path)
+    gif2 = Image.open(gif2_path)
+
+    frames = []
+
+    for frame1, frame2 in zip(ImageSequence.Iterator(gif1), ImageSequence.Iterator(gif2)):
+        f1 = frame1.convert('RGBA')
+        f2 = frame2.convert('RGBA')
+
+        # Resize gif2 frame only
+        if gif2_scale != 1.0:
+            new_width = int(f2.width * gif2_scale)
+            new_height = int(f2.height * gif2_scale)
+            f2 = f2.resize((new_width, new_height), resample=Image.BOX)
+
+        # Optionally pad f1 or f2 if widths differ
+        combined_width = max(f1.width, f2.width)
+        f1_padded = Image.new('RGBA', (combined_width, f1.height), (0, 0, 0, 0))
+        f1_padded.paste(f1, ((combined_width - f1.width) // 2, 0))
+
+        f2_padded = Image.new('RGBA', (combined_width, f2.height), (0, 0, 0, 0))
+        f2_padded.paste(f2, ((combined_width - f2.width) // 2, 0))
+
+        # Stack vertically
+        new_height = f1_padded.height + f2_padded.height
+        combined = Image.new('RGBA', (combined_width, new_height))
+        combined.paste(f1_padded, (0, 0))
+        combined.paste(f2_padded, (0, f1_padded.height))
+
+        frames.append(combined)
+
+    frames[0].save(
+        output_path,
+        save_all=True,
+        append_images=frames[1:],
+        duration=gif1.info.get('duration', 100),
+        loop=0,
+        disposal=2
+    )
+
+
+gif1 = '/Users/jae35/Documents/nceo/output/t_soil/(0)0-0p1m/map_animation.gif'
+gif2 = '/Users/jae35/Documents/nceo/output/t_soil/(0)0-0p1m/tseries_animation.gif'
+
+combine_gifs_vertically(gif1, gif2, "combined.gif", 0.362)
+
+
 

@@ -1,5 +1,6 @@
 import cartopy.crs as ccrs
 import numpy as np
+import miscOPS
 import mapJULES
 
 
@@ -33,6 +34,6 @@ def areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1
     ax.plot([lon1, lon2, lon2, lon1, lon1], [lat1, lat1, lat2, lat2, lat1], transform=ccrs.PlateCarree(), color='black', linewidth=3.0)
     ax.plot([lon1, lon2, lon2, lon1, lon1], [lat1, lat1, lat2, lat2, lat1], transform=ccrs.PlateCarree(), color='limegreen', linewidth=1.5)
 
-    ax.text(lon1+2.5, lat1+2.5, str(round(areal_mean, 3)) + '\n' + variable_unit, fontsize=11, color='black', ha='left', va='bottom', bbox=dict(facecolor='limegreen', edgecolor='none', alpha=0.3, boxstyle='round,pad=0.2'))
+    ax.text(lon1 + 0.5, lat2 + 0.5, miscOPS.cleanup_exponents(str(round(areal_mean, 3)) + variable_unit), fontsize=12, color='white', ha='left', va='bottom', bbox=dict(facecolor='limegreen', edgecolor='none', alpha=0.7, boxstyle='round,pad=0.2'))
 
     return areal_mean
