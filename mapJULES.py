@@ -20,10 +20,20 @@ def world_map(lats, lons):
     lon_min, lon_max, lat_min, lat_max = np.min(lons)-2.5, np.max(lons)+2.5, np.min(lats)-2.5, np.max(lats)+2.5
 
     # Figure size
-    scale = 0.1
-    map_width, map_height = lon_max - lon_min, lat_max - lat_min
-    fig_width, fig_height = map_width*scale, map_height*scale
+    #fig = plt.figure(figsize=(8, 4))
+    #fig.tight_layout(pad=0)
+
+    lat_range = lat_max - lat_min
+    lon_range = lon_max - lon_min
+    aspect_ratio = lat_range / lon_range  # Height / Width
+
+    # Use a fixed width and compute matching height
+    fig_width = 10
+    fig_height = fig_width * aspect_ratio
+
     fig = plt.figure(figsize=(fig_width, fig_height))
+
+    fig.set_constrained_layout(True)
 
     # Projection
     ax = plt.axes(projection=ccrs.PlateCarree())  # Use Robinson() for full-globe
@@ -79,54 +89,3 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     
     ax.set_title(miscOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=14)
     ax.text(np.min(lon2d)-1, np.min(lat2d)-1, miscOPS.remove_parenthetical_substrings(subtitle), fontsize=14, color='black', ha='left', va='bottom', style='italic')
-
-
-def latlon2area(lats, lons, latitude, longitude):
-
-    """_summary_
-    Args:
-        lats / lons (float): 1D arrays of latitude / longitude coordinates
-        latitude / longitude (float): latitude / longitude where area is desired
-    Returns:
-        box_area (float): Surface area of the gridbox centered on latitude / longitude
-    """
-
-    # Determine the spacing of latitude and longitude grid cells (degrees)
-    lat_sep, lon_sep = np.diff(lats)[0], np.diff(lons)[0]
-
-    # Compute the bounding latitudes and longitudes of the input coordinate (radians)
-    lat1, lat2, lon1, lon2 = latitude - lat_sep, latitude + lat_sep, longitude - lon_sep, longitude + lon_sep
-    lat1, lat2, lon1, lon2 = np.deg2rad(lat1), np.deg2rad(lat2), np.deg2rad(lon1), np.deg2rad(lon2)
-
-    # Compute the area of the grid box centered upon the input coordinate (km^2)
-    r_earth = 6.378e3  # Radius of Earth (km)
-    box_area = (r_earth**2.0) * (np.sin(lat1) - np.sin(lat2)) * (lon1 - lon2)
-
-    return(box_area)
-
-
-def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):
-
-    """Mask mesh-gridded latitudes and longitudes to flag those lying within a specified box-shaped region
-    Args:
-        lat2d / lon2d (float): 2D meshgrids of latitude / longitude coordinates
-        lat1 / lat2 (float):  Latitude range minimum / maximum (for averaging)
-        lon1 / lon2 (float): Longitude range minimum / maximum (for averaging)
-    Returns:
-        lat2d_masked / lon2d_masked (boolean): Arrays flagging which meshgridded latitudes,
-            and which meshgridded longitudes, lie within a specified box-shaped region
-    """
-
-    # Ensure correct min/max in case lat1 > lat2 or lon1 > lon2
-    lat_min, lat_max = min(lat1, lat2), max(lat1, lat2)
-    lon_min, lon_max = min(lon1, lon2), max(lon1, lon2)
-
-    # Build mask for points inside the bounding box
-    inside_mask = ((lat2d >= lat_min) & (lat2d <= lat_max) &
-                   (lon2d >= lon_min) & (lon2d <= lon_max))
-
-    # Set values OUTSIDE the bounding box to NaN
-    lat2d_masked = np.where(inside_mask, lat2d, np.nan)
-    lon2d_masked = np.where(inside_mask, lon2d, np.nan)
-
-    return lat2d_masked, lon2d_masked

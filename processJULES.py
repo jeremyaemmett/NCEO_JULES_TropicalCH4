@@ -1,7 +1,6 @@
 import cartopy.crs as ccrs
 import numpy as np
-import miscOPS
-import mapJULES
+import dataOPS
 
 
 def areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
@@ -20,10 +19,10 @@ def areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1
     """
 
     # Filter the latitudes and longitudes that lie within specified ranges
-    lat2d, lon2d = (mapJULES.bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2))
+    lat2d, lon2d = (dataOPS.bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2))
 
     # Get the areas of the filtered latitudes and longitudes
-    box_areas = mapJULES.latlon2area(lats, lons, lat2d, lon2d)
+    box_areas = dataOPS.latlon2area(lats, lons, lat2d, lon2d)
 
     # Compute the areal mean of the sliced variable
     valid_mask = ~np.isnan(variable_array)
@@ -34,6 +33,6 @@ def areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1
     ax.plot([lon1, lon2, lon2, lon1, lon1], [lat1, lat1, lat2, lat2, lat1], transform=ccrs.PlateCarree(), color='black', linewidth=3.0)
     ax.plot([lon1, lon2, lon2, lon1, lon1], [lat1, lat1, lat2, lat2, lat1], transform=ccrs.PlateCarree(), color='limegreen', linewidth=1.5)
 
-    ax.text(lon1 + 0.5, lat2 + 0.5, miscOPS.cleanup_exponents(str(round(areal_mean, 3)) + variable_unit), fontsize=12, color='white', ha='left', va='bottom', bbox=dict(facecolor='limegreen', edgecolor='none', alpha=0.7, boxstyle='round,pad=0.2'))
+    ax.text(lon1 + 0.5, lat2 + 0.5, dataOPS.cleanup_exponents(str(round(areal_mean, 3)) + variable_unit), fontsize=16, color='white', ha='left', va='bottom', bbox=dict(facecolor='limegreen', edgecolor='none', alpha=0.7, boxstyle='round,pad=0.2'))
 
     return areal_mean
