@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import plotTSERIES
 import plotPARAMS
+import plotZONAL
 import plotMAPS
 import sysOPS
 
@@ -13,6 +14,10 @@ data_path, outp_path, file_name = plotPARAMS.data_path, plotPARAMS.outp_path, pl
 
 # Variable(s) and year to map
 variable_names, year = plotPARAMS.variable_names, plotPARAMS.year
+
+plotZONAL.make_zonal()
+
+stop
 
 plotMAPS.make_maps()
 plotTSERIES.make_tseries()

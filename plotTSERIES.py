@@ -32,7 +32,7 @@ def make_tseries():
     grouped_files = {}
 
     # Make a list of every t-series file across all of the input variables
-    files = [os.path.join(r, f) for r, _, fs in os.walk(plotPARAMS.outp_path) for f in fs if f.endswith('.txt')]
+    files = [os.path.join(r, f) for r, _, fs in os.walk(plotPARAMS.outp_path) for f in fs if f.endswith('arealmean_tseries.txt')]
     files = dataOPS.filter_strings_by_substrings(files, plotPARAMS.variable_names)
 
     # Loop through every t-series file
@@ -94,7 +94,7 @@ def make_tseries():
 def make_animated_tseries():
 
     # Make a list of every t-series file across all of the input variables
-    files = sysOPS.discover_files(plotPARAMS.outp_path, 'tseries.txt')
+    files = sysOPS.discover_files(plotPARAMS.outp_path, 'arealmean_tseries.txt')
 
     unique_end_directories = sysOPS.get_unique_end_directories(files)
 
@@ -102,7 +102,7 @@ def make_animated_tseries():
 
     for unique_end_directory in unique_end_directories:
 
-        tseries_file = sysOPS.discover_files(unique_end_directory, 'tseries.txt')[0]
+        tseries_file = sysOPS.discover_files(unique_end_directory, 'arealmean_tseries.txt')[0]
         tseries_values = pd.read_csv(tseries_file, header=None)[0].tolist()
 
         # Recover the variable name from the file path
@@ -152,4 +152,4 @@ def make_animated_tseries():
 
         sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/tseries_animation.gif', duration=150, smooth=True, exclude_substr=['map', 'complete'])
 
-        [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(unique_end_directory) for f in fn if f.endswith('_tseries.png')]
+        [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(unique_end_directory) for f in fn if f.endswith('_arealmean_tseries.png')]

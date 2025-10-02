@@ -5,7 +5,6 @@ import processJULES
 import numpy as np
 import plotPARAMS
 import readJULES
-import plotMAPS
 import dataOPS
 import sysOPS
 import os
@@ -93,10 +92,11 @@ def make_maps():
             fig, ax = world_map(lats, lons)
 
             # Overlay the sliced variable with contours
-            plotMAPS.overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
+            overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
 
             # Compute an areal mean within a desired min, max-latitude and min, max-longitude range
             areal_mean = processJULES.areal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
+            zonal_mean = processJULES.zonal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
 
             # Clean up strings
             translation_table = str.maketrans({char: "" for char in "[]',"})
@@ -111,11 +111,13 @@ def make_maps():
 
             # Save plots and files in their end-point folder
             if sub_folder != None: 
-                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
+                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
                 plt.savefig(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + cleaned_text + '_map.png', dpi=300,  bbox_inches='tight')
+                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')
             else: 
-                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
+                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
                 plt.savefig(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '_map.png', dpi=300,  bbox_inches='tight')
+                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')
 
             plt.close()
 
