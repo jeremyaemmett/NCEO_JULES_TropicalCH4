@@ -36,3 +36,10 @@ def areal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1
     ax.text(lon1 + 0.5, lat2 + 0.5, dataOPS.cleanup_exponents(str(round(areal_mean, 3)) + variable_unit), fontsize=16, color='white', ha='left', va='bottom', bbox=dict(facecolor='limegreen', edgecolor='none', alpha=0.7, boxstyle='round,pad=0.2'))
 
     return areal_mean
+
+
+def zonal_mean(ax, variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
+
+    zonal_mean = np.nanmean(variable_array, axis=1)
+    
+    return zonal_mean
