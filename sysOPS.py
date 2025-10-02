@@ -61,7 +61,7 @@ def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_subst
         palette_base.paste(frame, (0, i * base_size[1]))
 
     # Use this image to generate a global palette
-    palette_image = palette_base.quantize(colors=256, method=Image.MEDIANCUT)
+    palette_image = palette_base.quantize(colors=256, method=Image.ADAPTIVE)
 
     # Apply global palette to all frames
     paletted_frames = [frame.quantize(palette=palette_image) for frame in full_frames]

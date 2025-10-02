@@ -10,4 +10,4 @@ def push2GitHub(message):
     os.system(f'git commit -m "{message}"')
     os.system("git push -u origin main")
 
-push2GitHub('added zonal mean heatmap')
+push2GitHub('added cumulative global average')

@@ -134,7 +134,7 @@ def make_animated_maps():
         map_files = sysOPS.discover_files(unique_end_directory, '_map.png')
         
         #miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/' + unique_end_directory.split('/')[-1] + '_animation.gif', duration=150, smooth=True, exclude_substr='plot_')
-        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete'])
+        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans'])
 
 
 def world_map(lats, lons):
