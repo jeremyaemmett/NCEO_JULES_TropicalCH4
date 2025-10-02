@@ -140,6 +140,9 @@ def make_animated_tseries():
 
             # --- Black 3-point segment centered around i ---
             start, end = max(0, i - 2), min(12, i - 1)
+            #ax2 = ax.twinx()
+            #ax2.fill_between(range(0, 12), np.cumsum(tseries_values), 0, color='blue', alpha=0.3)
+            #ax2.plot(range(0, 12), np.cumsum(tseries_values), color='gray', alpha=0.9, linewidth=4.0)
             if end - start > 1:
                 
                 ax.plot(range(start, end), tseries_values[start:end], color=color1, alpha=0.9, linewidth=4.0)
@@ -147,9 +150,9 @@ def make_animated_tseries():
             #ax.legend(edgecolor='white', facecolor='white', fontsize=10)
             ax.text(0.35, np.min(tseries_values) - 0.5*plot_margin, plotPARAMS.year, fontsize=18, color='black', ha='left', va='bottom', style='italic')
 
-            plt.savefig(unique_end_directory + '/' + str(i) + '_' + 'tseries.png', dpi=300, bbox_inches='tight')
+            plt.savefig(unique_end_directory + '/' + str(i) + '_' + '_arealmean_tseries.png', dpi=300, bbox_inches='tight')
             plt.close()
 
-        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/tseries_animation.gif', duration=150, smooth=True, exclude_substr=['map', 'complete'])
+        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/arealmean_tseries_animation.gif', duration=150, smooth=True, exclude_substr=['map', 'complete', 'zonalmeans'])
 
         [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(unique_end_directory) for f in fn if f.endswith('_arealmean_tseries.png')]
