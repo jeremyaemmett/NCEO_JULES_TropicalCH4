@@ -132,15 +132,19 @@ def latlon2area(lats, lons, latitude, longitude):
     # Determine the spacing of latitude and longitude grid cells (degrees)
     lat_sep, lon_sep = np.diff(lats)[0], np.diff(lons)[0]
 
-    # Compute the bounding latitudes and longitudes of the input coordinate (radians)
-    lat1, lat2, lon1, lon2 = latitude - lat_sep, latitude + lat_sep, longitude - lon_sep, longitude + lon_sep
-    lat1, lat2, lon1, lon2 = np.deg2rad(lat1), np.deg2rad(lat2), np.deg2rad(lon1), np.deg2rad(lon2)
+    # Clip to avoid going outside valid lat range
+    lat1, lat2 = np.clip([latitude - lat_sep, latitude + lat_sep], -90, 90)
+    lon1, lon2 = longitude - lon_sep, longitude + lon_sep
 
-    # Compute the area of the grid box centered upon the input coordinate (km^2)
-    r_earth = 6.378e3  # Radius of Earth (km)
-    box_area = (r_earth**2.0) * (np.sin(lat1) - np.sin(lat2)) * (lon1 - lon2)
+    # Convert to radians
+    lat1, lat2 = np.deg2rad(lat1), np.deg2rad(lat2)
+    lon1, lon2 = np.deg2rad(lon1), np.deg2rad(lon2)
 
-    return(box_area)
+    # Compute area in km^2
+    r_earth = 6.378e3  # km
+    box_area = (r_earth**2) * (np.sin(lat2) - np.sin(lat1)) * (lon2 - lon1)
+
+    return box_area
 
 
 def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):

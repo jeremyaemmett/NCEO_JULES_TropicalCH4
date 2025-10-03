@@ -11,7 +11,7 @@ variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'l
                   'b', 'fexp', 'hcap', 'hcon', 'satcon', 'sathh', 'sm_crit', 'sm_sat', 'sm_wilt',
                   'ti_mean', 'ti_sig']
 
-variable_names = ['fch4_wetl']
+variable_names = ['fch4_wetl', 't_soil']
 
 # Year
 year = 2016
