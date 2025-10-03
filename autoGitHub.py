@@ -10,4 +10,4 @@ def push2GitHub(message):
     os.system(f'git commit -m "{message}"')
     os.system("git push -u origin main")
 
-push2GitHub('added cumulative global average')
+push2GitHub('made time series overlap the zonal plots, made average row, made cumulative row')

@@ -12,12 +12,6 @@ import os
 
 def make_maps():
 
-    # Clear all .txt files in the output path
-    [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(plotPARAMS.outp_path) for f in fn if f.endswith('.txt')]
-
-    dimensions, variables, global_attributes = readJULES.read_jules_header(plotPARAMS.data_path+plotPARAMS.file_name)
-    #readJULES.get_variable_details(variables, data_path, file_name)
-
     # Full 'time' array
     times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'time')
     # Get the time dimension indices that fall within the desired year
@@ -37,8 +31,6 @@ def make_maps():
 
         #variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
         variable_global_min, variable_global_max = dataOPS.globalMinMax(variable_array, variable_unit)
-
-        print(variable_name, np.shape(variable_array))
 
         # If the variable has a 'time' axis, trim it along the time axis to the desired year
         if 'time' in variable_dims:
@@ -94,30 +86,15 @@ def make_maps():
             # Overlay the sliced variable with contours
             overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
 
-            # Compute an areal mean within a desired min, max-latitude and min, max-longitude range
-            areal_mean = processJULES.areal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
-            zonal_mean = processJULES.zonal_mean(ax, variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
-
             # Clean up strings
             translation_table = str.maketrans({char: "" for char in "[]',"})
             cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_").replace(".", "p")
 
-            # Make an output folder and a variable folder inside the output folder
-            os.makedirs(plotPARAMS.outp_path + 'output', exist_ok=True)
-            os.makedirs(plotPARAMS.outp_path + 'output/' + variable_name, exist_ok=True)
-
-            # Make a sub-folder within the variable folder, if the variable has another non-lat/lon dimension besides 'time'
-            if sub_folder != None: os.makedirs(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder, exist_ok=True)
-
             # Save plots and files in their end-point folder
             if sub_folder != None: 
-                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
                 plt.savefig(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + cleaned_text + '_map.png', dpi=300,  bbox_inches='tight')
-                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')
             else: 
-                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')
                 plt.savefig(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '_map.png', dpi=300,  bbox_inches='tight')
-                with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')
 
             plt.close()
 
