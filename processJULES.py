@@ -54,12 +54,12 @@ def compute_zonal_intg(variable_array, variable_unit, lat2d, lon2d, lats, lons, 
     # Filter the latitudes and longitudes that lie within specified ranges
     lat2d, lon2d = (dataOPS.bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2))
 
-    # Get the areas of the filtered latitudes and longitudes
+    # Get the areas of the filtered latitudes and longitudes (m^2)
     box_areas = dataOPS.latlon2area(lats, lons, lat2d, lon2d)
 
-    latlon_totals = variable_array * box_areas
+    latlon_totals = variable_array * box_areas # (kg/m2/s) x (m2) = (kg/s)
 
-    zonal_intg = np.nansum(latlon_totals, axis=1)
+    zonal_intg = 2.628e6 * np.nansum(latlon_totals, axis=1) # (s/month) * Σ(kg/s) = Σ(kg/month)
 
     return zonal_intg
 
