@@ -141,7 +141,7 @@ def latlon2area(lats, lons, latitude, longitude):
     lon1, lon2 = np.deg2rad(lon1), np.deg2rad(lon2)
 
     # Compute area in km^2
-    r_earth = 6.378e3  # km
+    r_earth = 6.378e6  # km
     box_area = (r_earth**2) * (np.sin(lat2) - np.sin(lat1)) * (lon2 - lon1)
 
     return box_area
@@ -190,5 +190,14 @@ def remove_parenthetical_substrings(string_with_parentheses):
         elif skip==0: r.append(c)
 
     return ''.join(r)
+
+
+def check_if_rate(unit_string):
+
+    substrings = ['s-1', 'm-1', 'y-1']
+
+    is_a_rate = any(sub in unit_string for sub in substrings)
+
+    return(is_a_rate)
 
 
