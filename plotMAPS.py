@@ -17,9 +17,22 @@ def make_maps():
     # Get the time dimension indices that fall within the desired year
     year_indices = np.where((times >= np.datetime64(f'{plotPARAMS.year}-01-01')) & (times < np.datetime64(f'{plotPARAMS.year + 1}-01-01')))[0]
 
+    header = readJULES.read_jules_header(plotPARAMS.data_path + plotPARAMS.file_name)
+    dimension_keys, variable_keys = list(header[0]), list(header[1])
+
+    if 'latitude' in variable_keys and 'longitude' in variable_keys: lat_string, lon_string = 'latitude', 'longitude'
+    if 'lat' in variable_keys and 'lon' in variable_keys: lat_string, lon_string = 'lat', 'lon'
+
+    if 'lat' in dimension_keys and 'lon' in dimension_keys: lat_key, lon_key = 'lat', 'lon'
+    if 'y' in dimension_keys and 'x' in dimension_keys: lat_key, lon_key = 'y', 'x'
+
     # Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lat')
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lon')
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
+    
+    coords_are_2d = len(np.shape(lats)) == 2
+    if coords_are_2d: lats, lons = lats[:, 0], lons[0, :]
+    
     lon2d, lat2d = np.meshgrid(lons, lats)
 
     for variable_name in plotPARAMS.variable_names:
@@ -39,7 +52,7 @@ def make_maps():
 
         # Boolean mask to indicate which variable array axes contain non-lat/lon data
         # Example: [True True False False] indicates that axes 0 and 1 contain non-lat/lon data.
-        iterable_dimension_mask = ~np.isin(list(variable_dims), ['lon', 'lat'])
+        iterable_dimension_mask = ~np.isin(list(variable_dims), [lon_key, lat_key])
 
         # Array providing the labels (keys) of the non-lat/lon axes
         # Example: ['time' 'soil'] indicates that the array contains 'time' (month) and 'soil' (depth) data
@@ -78,7 +91,7 @@ def make_maps():
             sub_folder = key_labels[-1].replace(".", "p").replace(" ", "") if len(key_labels) > 2 else None
 
             # Transpose to match the lat/lon meshgrid shape
-            variable_array2 = np.transpose(variable_array2)
+            if variable_array2.shape != lon2d.shape: variable_array2 = np.transpose(variable_array2)
 
             # Make an empty world map
             fig, ax = world_map(lats, lons)

@@ -74,17 +74,35 @@ def write_processed_files():
     # Get the time dimension indices that fall within the desired year
     year_indices = np.where((times >= np.datetime64(f'{plotPARAMS.year}-01-01')) & (times < np.datetime64(f'{plotPARAMS.year + 1}-01-01')))[0]
 
+    header = readJULES.read_jules_header(plotPARAMS.data_path + plotPARAMS.file_name)
+    dimension_keys, variable_keys = list(header[0]), list(header[1])
+
+    if 'latitude' in variable_keys and 'longitude' in variable_keys: lat_string, lon_string = 'latitude', 'longitude'
+    if 'lat' in variable_keys and 'lon' in variable_keys: lat_string, lon_string = 'lat', 'lon'
+
+    if 'lat' in dimension_keys and 'lon' in dimension_keys: lat_key, lon_key = 'lat', 'lon'
+    if 'y' in dimension_keys and 'x' in dimension_keys: lat_key, lon_key = 'y', 'x'
+
     # Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lat')
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lon')
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
+
+    coords_are_2d = len(np.shape(lats)) == 2
+    if coords_are_2d: lats, lons = lats[:, 0], lons[0, :]
+
     lon2d, lat2d = np.meshgrid(lons, lats)
 
-    for variable_name in plotPARAMS.variable_names:
+    print('mesh shape: ', np.shape(lon2d))
 
+    for variable_name in plotPARAMS.variable_names:
+        print('var name: ', variable_name)
         # Variable to plot, its full array
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, variable_name)
 
         variable_array = dataOPS.sanitize_extreme_values(variable_array)
+
+        print('var shape: ', np.shape(variable_array))
+        #stop
 
         # If the variable has a 'time' axis, trim it along the time axis to the desired year
         if 'time' in variable_dims:
@@ -93,7 +111,8 @@ def write_processed_files():
 
         # Boolean mask to indicate which variable array axes contain non-lat/lon data
         # Example: [True True False False] indicates that axes 0 and 1 contain non-lat/lon data.
-        iterable_dimension_mask = ~np.isin(list(variable_dims), ['lon', 'lat'])
+        iterable_dimension_mask = ~np.isin(list(variable_dims), [lon_key, lat_key])
+        #print('mask:', iterable_dimension_mask)
 
         # Array providing the labels (keys) of the non-lat/lon axes
         # Example: ['time' 'soil'] indicates that the array contains 'time' (month) and 'soil' (depth) data
@@ -124,21 +143,27 @@ def write_processed_files():
                 # Slice the array along its 'slice_index'-count axis and 'slice_val' dimension
                 # The '-count' is necessary because the array's dimension shrinks by one dimension with each slice
                 variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
-
+                print('variable name: ', variable_name)
                 # Append the label for file-naming purposes
                 key_labels.append("("+str(slice_val)+")" + dataOPS.keyval2keylabel(var_dim_key, slice_val))
                 count += 1
 
             sub_folder = key_labels[-1].replace(".", "p").replace(" ", "") if len(key_labels) > 2 else None
-
+            
             # Transpose to match the lat/lon meshgrid shape
-            variable_array2 = np.transpose(variable_array2)
+            if variable_array2.shape != lon2d.shape: variable_array2 = np.transpose(variable_array2)
 
+            print('dimensions: ', np.shape(lat2d))
+            #stop
+
+            lat_min, lat_max, lon_min, lon_max = np.nanmin(lats), np.nanmax(lats), np.nanmin(lons), np.nanmax(lons)
+            #lat_min, lat_max, lon_min, lon_max = -20, 15, -15, 50
+            
             # Compute an areal mean within a desired min, max-latitude and min, max-longitude range
-            areal_mean = compute_areal_mean(variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
-            zonal_mean = compute_zonal_mean(variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
-            zonal_intg = compute_zonal_intg(variable_array2, variable_unit, lat2d, lon2d, lats, lons, -20, 15, -15, 50)
-
+            areal_mean = compute_areal_mean(variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat_min, lat_max, lon_min, lon_max)
+            zonal_mean = compute_zonal_mean(variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat_min, lat_max, lon_min, lon_max)
+            zonal_intg = compute_zonal_intg(variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat_min, lat_max, lon_min, lon_max)
+            
             # Clean up strings
             translation_table = str.maketrans({char: "" for char in "[]',"})
             cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_").replace(".", "p")
@@ -149,7 +174,7 @@ def write_processed_files():
 
             # Make a sub-folder within the variable folder, if the variable has another non-lat/lon dimension besides 'time'
             if sub_folder != None: os.makedirs(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder, exist_ok=True)
-
+            
             # Save plots and files in their end-point folder
             if sub_folder != None: 
                 with open(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + sub_folder + '_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')

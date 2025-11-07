@@ -22,9 +22,21 @@ def make_zonal():
     
     unique_end_directories = sysOPS.get_unique_end_directories(files)
 
+    header = readJULES.read_jules_header(plotPARAMS.data_path + plotPARAMS.file_name)
+    dimension_keys, variable_keys = list(header[0]), list(header[1])
+
+    if 'latitude' in variable_keys and 'longitude' in variable_keys: lat_string, lon_string = 'latitude', 'longitude'
+    if 'lat' in variable_keys and 'lon' in variable_keys: lat_string, lon_string = 'lat', 'lon'
+
+    if 'lat' in dimension_keys and 'lon' in dimension_keys: lat_key, lon_key = 'lat', 'lon'
+    if 'y' in dimension_keys and 'x' in dimension_keys: lat_key, lon_key = 'y', 'x'
+
     # Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lat')
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lon')
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
+
+    coords_are_2d = len(np.shape(lats)) == 2
+    if coords_are_2d: lats, lons = lats[:, 0], lons[0, :]
 
     lat_spacing = np.diff(lats)[0]
 
