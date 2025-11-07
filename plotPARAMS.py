@@ -1,7 +1,14 @@
 # JULES output file path/name
-data_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
-outp_path = '/Users/jae35/Documents/nceo/'
-file_name = 'u-ck843_preprocessed.nc'
+ftype = 1
+
+if ftype == 1:
+    data_path = '/Users/jae35/Desktop/JULES_test_data/JULES_wetlands_JE/'
+    outp_path = '/Users/jae35/Documents/nceo/'
+    file_name = 'u-ck843_preprocessed.nc'
+else: 
+    data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output/'#
+    outp_path = '/Users/jae35/Documents/jasmin/'
+    file_name = 'monthly_means_2015.nc'
 
 # Variable(s)
 variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'lw_net', 'sw_net', 

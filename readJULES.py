@@ -34,7 +34,7 @@ def read_jules_m2(file_path, variable):
     for var_name in ds.variables:
         var = ds[var_name]
         data_dict[var_name] = {'data': var.values, 'attrs': dict(var.attrs), 'dims': var.dims}
-
+    print(ds.keys())
     array = data_dict[variable]['data']
     #print(data_dict[variable]['attrs'])
     long_name = data_dict[variable]['attrs'].get('long_name', 'unknown')

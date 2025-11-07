@@ -1,5 +1,9 @@
+import xarray as xr
 import subprocess
+import shlex
+import glob
 import time
+import os
 
 def load_key():
 
@@ -25,7 +29,7 @@ def ssh_to_jasmin():
         activate
         do script "{ssh_login_command}"
         delay {delay_seconds}
-        do script "{ssh_sci_command}" in front window
+        do script "{ssh_cylc_command}" in front window
     end tell
     '''
 
@@ -206,11 +210,87 @@ def check_error_file():
 
     subprocess.run(["osascript", "-e", apple_script])
 
-load_key()
-time.sleep(5)
 
-ssh_to_jasmin()
-time.sleep(5)
+def scp_from_jasmin(local_directory, remote_directory_and_files):
+    # Build the scp command (exactly the one you want)
+    cmd = (
+        "scp -v -o ProxyJump=jae35@login-03.jasmin.ac.uk "
+        f"jae35@cylc2.jasmin.ac.uk:'{remote_directory_and_files}' "
+        f"{shlex.quote(local_directory)}"
+    )
+
+    print(f"\n🔧 Running command:\n{cmd}\n")
+
+    # Run the command with live output (no capture)
+    result = subprocess.run(cmd, shell=True)
+
+    if result.returncode == 0:
+        print("\nFiles copied successfully!\n")
+    else:
+        print(f"\nscp failed with exit code {result.returncode}\n")
+
+
+import xarray as xr
+import os
+import glob
+
+def daily_to_monthly(input_folder, output_file, file_pattern="*.nc"):
+    """
+    Convert daily NetCDF files in a folder to a single NetCDF of monthly averages.
+    Works without Dask by manually concatenating files.
+
+    Parameters:
+    -----------
+    input_folder : str
+        Path to the folder containing daily NetCDF files.
+    output_file : str
+        Path to the output NetCDF file for monthly averages.
+    file_pattern : str, optional
+        Pattern to match files in the folder (default is '*.nc').
+
+    Returns:
+    --------
+    None
+    """
+    # Find all files matching the pattern
+    files = sorted(glob.glob(os.path.join(input_folder, file_pattern)))
+    if not files:
+        raise FileNotFoundError(f"No files found matching {file_pattern} in {input_folder}")
+
+    # Open all files into a list of datasets
+    datasets = [xr.open_dataset(f) for f in files]
+
+    # Concatenate along the time dimension
+    ds = xr.concat(datasets, dim="time")
+
+    # Ensure time coordinate is datetime
+    if not xr.core.common.is_np_datetime_like(ds.time):
+        ds["time"] = xr.decode_cf(ds).time
+
+    # Compute monthly averages
+    monthly_ds = ds.resample(time="1M").mean()
+
+    # Save to NetCDF
+    monthly_ds.to_netcdf(output_file)
+    print(f"Monthly averages saved to: {output_file}")
+
+
+
+task = 'process'
+
+if task == 'ssh':
+
+    load_key()
+    time.sleep(5)
+    ssh_to_jasmin()
+
+if task == 'scp':
+
+    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw3/jae35/TEST7.7/triffid_off_rivers_off/*.nc')
+
+if task == 'process':
+
+    daily_to_monthly('/Users/jae35/Desktop/JULES_test_data/JASMIN_output','/Users/jae35/Desktop/JULES_test_data/JASMIN_output/monthly_means_2015.nc','*Daily.2015*.nc')
 
 #copy_bashrc()
 #time.sleep(5)

@@ -34,6 +34,7 @@ def keyval2keylabel(keyname, keyval):
     if keyname == 'soil': labels = ['0-0.1 m', '0.1-0.35 m', '0.35-1.0 m', '1.0-2.0 m']
     if keyname == 'pft':  labels = ['BET-Tr', 'BET-Te', 'BDT', 'NET', 'NDT', 'C3G', 'C4G', 'ESh', 'DSh', 'C3Cr', 'C4Cr', 'C3Pa', 'C4Pa']
 
+    print('key stuff: ', keyval, keyname)
     key_label = labels[keyval]
 
     return key_label
@@ -120,29 +121,46 @@ def cleanup_exponents(text):
 
 
 def latlon2area(lats, lons, latitude, longitude):
-
-    """_summary_
-    Args:
-        lats / lons (float): 1D arrays of latitude / longitude coordinates
-        latitude / longitude (float): latitude / longitude where area is desired
-    Returns:
-        box_area (float): Surface area of the gridbox centered on latitude / longitude
     """
+    Compute the surface area of a gridbox centered on a given latitude/longitude.
 
-    # Determine the spacing of latitude and longitude grid cells (degrees)
-    lat_sep, lon_sep = np.diff(lats)[0], np.diff(lons)[0]
+    Args:
+        lats / lons (1D or 2D arrays): latitude and longitude arrays
+        latitude / longitude (float or 2D array): location(s) where area is desired
 
-    # Clip to avoid going outside valid lat range
-    lat1, lat2 = np.clip([latitude - lat_sep, latitude + lat_sep], -90, 90)
-    lon1, lon2 = longitude - lon_sep, longitude + lon_sep
+    Returns:
+        box_area (float or array): Surface area of the gridbox (same shape as latitude/longitude)
+    """
+    import numpy as np
+
+    # Ensure lats/lons spacing is scalar
+    if np.ndim(lats) > 1:
+        lat_sep = np.mean(np.diff(lats, axis=0))
+    else:
+        lat_sep = np.diff(lats)[0]
+
+    if np.ndim(lons) > 1:
+        lon_sep = np.mean(np.diff(lons, axis=1))
+    else:
+        lon_sep = np.diff(lons)[0]
+
+    # Compute grid edges
+    lat1 = np.clip(latitude - lat_sep / 2, -90, 90)
+    lat2 = np.clip(latitude + lat_sep / 2, -90, 90)
+    lon1 = longitude - lon_sep / 2
+    lon2 = longitude + lon_sep / 2
 
     # Convert to radians
-    lat1, lat2 = np.deg2rad(lat1), np.deg2rad(lat2)
-    lon1, lon2 = np.deg2rad(lon1), np.deg2rad(lon2)
+    lat1 = np.deg2rad(lat1)
+    lat2 = np.deg2rad(lat2)
+    lon1 = np.deg2rad(lon1)
+    lon2 = np.deg2rad(lon2)
 
-    # Compute area in km^2
-    r_earth = 6.378e6  # km
-    box_area = (r_earth**2) * (np.sin(lat2) - np.sin(lat1)) * (lon2 - lon1)
+    # Earth radius in meters
+    r_earth = 6.378e6
+
+    # Area formula
+    box_area = (r_earth ** 2) * (np.sin(lat2) - np.sin(lat1)) * (lon2 - lon1)
 
     return box_area
 
