@@ -41,10 +41,11 @@ def make_zonal():
     lat_spacing = np.diff(lats)[0]
 
     for unique_end_directory in unique_end_directories:
-
+        print(unique_end_directory)
         zonal_file = sysOPS.discover_files(unique_end_directory, '_zonalmean_tseries.txt')[0]
         areal_file = sysOPS.discover_files(unique_end_directory, '_arealmean_tseries.txt')[0]
         integ_file = sysOPS.discover_files(unique_end_directory, '_zonalintg_tseries.txt')[0]
+        print(integ_file)
 
         # Recover the variable name from the file path
         parts = os.path.normpath(zonal_file).split(os.sep)
@@ -57,7 +58,7 @@ def make_zonal():
 
         k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, key)
 
-        print('k_unit: ', k_unit, ' ', dataOPS.check_if_rate(k_unit))
+        #print('k_unit: ', k_unit, ' ', dataOPS.check_if_rate(k_unit))
 
         is_rate = dataOPS.check_if_rate(k_unit)
 
@@ -68,6 +69,7 @@ def make_zonal():
         areal_values = np.loadtxt(areal_file).T
 
         integ_values = np.loadtxt(integ_file).T
+
         integ_values_cumsum = np.cumsum(integ_values, axis=1)
 
         # Assuming lats is your latitude array with length 100
@@ -83,7 +85,7 @@ def make_zonal():
         #c = ax1.contourf(X, Y, zonal_values_trimmed, levels=20, cmap='magma')
         c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto', alpha=0.85)
 
-        plot_title = "  Zonal mean"
+        plot_title = "  Zonal and full-region means"
         ax1.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
         ax1.set_ylabel("Latitude", fontsize=18)
         months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -110,7 +112,7 @@ def make_zonal():
         #ax_areal_mean.step(range(len(areal_values)), areal_values, linewidth=4.0, color='white', where='mid')
         #ax_areal_mean.step(range(len(areal_values)), areal_values, linewidth=2.0, color='black', where='mid')
 
-        plot_title = "  Seasonal mean"
+        plot_title = "  Monthly zonal means"
         ax2.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
         ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit), fontsize=18)
         ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
@@ -137,7 +139,7 @@ def make_zonal():
 
             c = ax3.pcolormesh(X, Y, integ_values_cumsum, cmap='magma', shading='auto', alpha=0.85)
 
-            plot_title = "  Zonally-integrated"
+            plot_title = "  Zonal and full-region cumulative"
             ax3.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
             ax3.set_ylabel("Latitude", fontsize=18)
             months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -164,7 +166,7 @@ def make_zonal():
             ax_zonal_intg.tick_params(direction='in', labelsize=14)
             ax_zonal_intg.yaxis.get_offset_text().set_fontsize(14)
 
-            plot_title = "  Seasonal cumulative"
+            plot_title = "  Monthly zonal cumulative"
             ax4.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
             #ax4.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=18)
             ax4.set_xlabel(dataOPS.cleanup_exponents("kg"), fontsize=18)
