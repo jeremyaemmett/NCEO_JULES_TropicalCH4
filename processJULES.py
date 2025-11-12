@@ -92,10 +92,10 @@ def write_processed_files():
 
     lon2d, lat2d = np.meshgrid(lons, lats)
 
-    print('mesh shape: ', np.shape(lon2d))
+    #print('mesh shape: ', np.shape(lon2d))
 
     for variable_name in plotPARAMS.variable_names:
-        print('var name: ', variable_name)
+        #print('var name: ', variable_name)
         # Variable to plot, its full array
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, variable_name)
 
@@ -109,6 +109,8 @@ def write_processed_files():
             time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
             variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
 
+        print('var shape2: ', np.shape(variable_array))
+
         # Boolean mask to indicate which variable array axes contain non-lat/lon data
         # Example: [True True False False] indicates that axes 0 and 1 contain non-lat/lon data.
         iterable_dimension_mask = ~np.isin(list(variable_dims), [lon_key, lat_key])
@@ -121,17 +123,20 @@ def write_processed_files():
         # Array providing the indices of the non-lat/lon variable axes
         # Example: [0 1] indicates that 'time' is contained in the 0th index, 'soil' in the 1st
         iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
-
+        print('idxs: ', iterable_dimension_idxs)
         # Array providing the the number of dimensions along each non-lat/lon axis
         # Example: [12 4] indicates that 'time' has 12 values and 'soil' has 4 values
         iterable_dimension_iter = np.array(np.shape(variable_array))[iterable_dimension_idxs]
-
+        print('iterable dim iter: ', iterable_dimension_iter)
         # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
         # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
         indices = dataOPS.generate_indices(list(iterable_dimension_iter))
         
         # Loop through each tuple (slice combo). Each combo makes a unique map.
+        print('indices: ', indices)
         for combo in indices:
+
+            print(variable_name, combo)
 
             key_labels = [str(plotPARAMS.year)]
             variable_array2 = np.copy(variable_array)
@@ -143,7 +148,7 @@ def write_processed_files():
                 # Slice the array along its 'slice_index'-count axis and 'slice_val' dimension
                 # The '-count' is necessary because the array's dimension shrinks by one dimension with each slice
                 variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
-                print('variable name: ', variable_name)
+                #print('variable name: ', variable_name)
                 # Append the label for file-naming purposes
                 key_labels.append("("+str(slice_val)+")" + dataOPS.keyval2keylabel(var_dim_key, slice_val))
                 count += 1
@@ -153,11 +158,12 @@ def write_processed_files():
             # Transpose to match the lat/lon meshgrid shape
             if variable_array2.shape != lon2d.shape: variable_array2 = np.transpose(variable_array2)
 
-            print('dimensions: ', np.shape(lat2d))
+            #print('dimensions: ', np.shape(lat2d))
             #stop
 
             lat_min, lat_max, lon_min, lon_max = np.nanmin(lats), np.nanmax(lats), np.nanmin(lons), np.nanmax(lons)
             #lat_min, lat_max, lon_min, lon_max = -20, 15, -15, 50
+            #lat_min, lat_max, lon_min, lon_max = 3.0, 7.0, 99.0, 105.0
             
             # Compute an areal mean within a desired min, max-latitude and min, max-longitude range
             areal_mean = compute_areal_mean(variable_array2, variable_unit, lat2d, lon2d, lats, lons, lat_min, lat_max, lon_min, lon_max)

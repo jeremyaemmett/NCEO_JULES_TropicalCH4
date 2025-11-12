@@ -34,7 +34,7 @@ def keyval2keylabel(keyname, keyval):
     if keyname == 'soil': labels = ['0-0.1 m', '0.1-0.35 m', '0.35-1.0 m', '1.0-2.0 m']
     if keyname == 'pft':  labels = ['BET-Tr', 'BET-Te', 'BDT', 'NET', 'NDT', 'C3G', 'C4G', 'ESh', 'DSh', 'C3Cr', 'C4Cr', 'C3Pa', 'C4Pa']
 
-    print('key stuff: ', keyval, keyname)
+    #print('key stuff: ', keyval, keyname)
     key_label = labels[keyval]
 
     return key_label

@@ -140,6 +140,7 @@ def world_map(lats, lons):
 
     # Add some extra space to the map edges
     lon_min, lon_max, lat_min, lat_max = np.min(lons)-2.5, np.max(lons)+2.5, np.min(lats)-2.5, np.max(lats)+2.5
+    #lon_min, lon_max, lat_min, lat_max = plotPARAMS.lon_min, plotPARAMS.lon_max, plotPARAMS.lat_min, plotPARAMS.lat_max
 
     # Figure size
     #scale = 0.1
