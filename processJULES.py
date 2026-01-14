@@ -102,7 +102,8 @@ def write_processed_files():
         variable_array = dataOPS.sanitize_extreme_values(variable_array)
 
         print('var shape: ', np.shape(variable_array))
-        #stop
+        print('variable name: ', variable_name)
+        print(np.nanmax(variable_array))
 
         # If the variable has a 'time' axis, trim it along the time axis to the desired year
         if 'time' in variable_dims:
