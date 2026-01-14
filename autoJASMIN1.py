@@ -1,5 +1,8 @@
 import xarray as xr
+import pandas as pd
+import numpy as np
 import subprocess
+import readJULES
 import shlex
 import glob
 import time
@@ -275,8 +278,30 @@ def daily_to_monthly(input_folder, output_file, file_pattern="*.nc"):
     print(f"Monthly averages saved to: {output_file}")
 
 
+def daily_to_monthly2(input_file, output_file):
 
-task = 'process'
+    # Input and output files
+    input_file = "/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu/Umzimvubu_RFMh.Daily.nc"
+    output_file = "/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu/Umzimvubu_RFMh.Monthly.nc"
+
+    # Open dataset
+    ds = xr.open_dataset(input_file)
+
+    # Ensure 'time' is in datetime format (assuming 'time' is days since a reference date)
+    # If 'time' is already a datetime64, this will do nothing
+    if not np.issubdtype(ds['time'].dtype, np.datetime64):
+        # Replace 'YYYY-01-01' with your reference date if needed
+        ds['time'] = pd.to_datetime(ds['time'].values, origin='YYYY-01-01', unit='D')
+
+    # Compute monthly means
+    ds_monthly = ds.resample(time='1M').mean(dim='time')
+
+    # Save to new NetCDF
+    ds_monthly.to_netcdf(output_file)
+
+    print(f"Monthly averages saved to {output_file}")
+
+task = 'ssh'
 
 if task == 'ssh':
 
@@ -286,11 +311,17 @@ if task == 'ssh':
 
 if task == 'scp':
 
-    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw3/jae35/TEST7.7/triffid_off_rivers_off/*.nc')
+    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw4/jae35/Umzim*.nc')
 
 if task == 'process':
 
     daily_to_monthly('/Users/jae35/Desktop/JULES_test_data/JASMIN_output','/Users/jae35/Desktop/JULES_test_data/JASMIN_output/monthly_means_2015.nc','*Daily.2015*.nc')
+
+if task == 'examine':
+
+    readJULES.examine_nc_file('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu/Umzimvubu_RFMh.Monthly.nc')
+    #daily_to_monthly2('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu/Umzimvubu_RFMh.Daily.nc', 'Umzimvubu_RFMh.Monthly.nc')
+    #readJULES.examine_nc_file('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu/Umzimvubu_RFMh.Monthly.nc')
 
 #copy_bashrc()
 #time.sleep(5)

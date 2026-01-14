@@ -81,3 +81,30 @@ def get_variable_details(variables, data_path, file_name):
         #if variable_name == 'time': 
         #    print(variable_name)
         #   print(variable_array)
+
+def examine_nc_file(file_path):
+    """
+    Examine the structure of a .nc (NetCDF) file.
+    
+    Args:
+        file_path (str): Path to the .nc file
+    """
+    try:
+        # Open the NetCDF file
+        nc = Dataset(file_path, 'r')
+        print(f"File: {file_path}")
+        print(f"Dimensions:")
+        for dim_name, dim in nc.dimensions.items():
+            print(f"  {dim_name}: size = {len(dim)}, unlimited = {dim.isunlimited()}")
+
+        print(f"\nVariables:")
+        for var_name, var in nc.variables.items():
+            print(f"  {var_name}: dimensions = {var.dimensions}, shape = {var.shape}, dtype = {var.dtype}")
+
+        print(f"\nGlobal attributes:")
+        for attr_name in nc.ncattrs():
+            print(f"  {attr_name} = {getattr(nc, attr_name)}")
+
+        nc.close()
+    except Exception as e:
+        print(f"Error opening file: {e}")
