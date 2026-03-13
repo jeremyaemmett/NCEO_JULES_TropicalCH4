@@ -14,9 +14,10 @@ if ftype == 2:
     lat_min, lat_max, lon_min, lon_max = 3.25, 6.45, 100.0, 103.7
     year = 2015
 if ftype == 3:
-    data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu/'#
+    data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_Umzimvubu3/'
     outp_path = data_path + 'plots/'
-    file_name = 'Umzimvubu_RFMh.Monthly.nc'
+    #file_name = 'Umzimvubu_RFMh.Monthly.nc'
+    file_name = 'umz2010.nc'
     lat_min, lat_max, lon_min, lon_max = -25.0, 25.0, -20.0, 60.0
     year = 2010
 
@@ -28,4 +29,4 @@ variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'l
                   'b', 'fexp', 'hcap', 'hcon', 'satcon', 'sathh', 'sm_crit', 'sm_sat', 'sm_wilt',
                   'ti_mean', 'ti_sig']
 
-variable_names = ['fch4_wetl', 't_soil', 'lw_down']
+variable_names = ['fch4_wetl', 't_soil']
