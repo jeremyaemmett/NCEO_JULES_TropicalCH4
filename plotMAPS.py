@@ -44,6 +44,13 @@ def make_maps():
 
         #variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
         variable_global_min, variable_global_max = dataOPS.globalMinMax(variable_array, variable_unit)
+        if np.isnan(variable_global_min) and np.isnan(variable_global_max):
+            variable_global_min, variable_global_max = -1.0, 1.0
+
+        print('global')
+        print('test: ', variable_global_min == np.nan and variable_global_max == np.nan)
+        print(variable_name)
+        print(variable_global_min, variable_global_max)
 
         # If the variable has a 'time' axis, trim it along the time axis to the desired year
         if 'time' in variable_dims:
@@ -179,6 +186,9 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     """
 
     vmin, vmax = variable_global_min, variable_global_max
+
+    print('vmin, vmax: ', vmin, vmax)
+
     n_levels = 10
 
     step_raw = (vmax - vmin) / (n_levels - 1)
@@ -188,6 +198,7 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     vmin_r = np.floor(vmin / step) * step
     vmax_r = np.ceil(vmax / step) * step
 
+    print('var: ', variable_name)
     levels = np.arange(vmin_r, vmax_r + step/2, step)
 
     c = ax.contourf(lon2d, lat2d, variable_array,

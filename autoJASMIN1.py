@@ -22,7 +22,8 @@ def load_key():
 
 def ssh_to_jasmin():
 
-    ssh_login_command = "ssh -AX jae35@login-03.jasmin.ac.uk"
+    #ssh_login_command = "ssh -AX jae35@login-03.jasmin.ac.uk"
+    ssh_login_command = "ssh -AX jae35@login.jasmin.ac.uk"
     ssh_cylc_command = "ssh cylc2.jasmin.ac.uk"
     ssh_sci_command = "ssh sci-vm-02.jasmin.ac.uk"
     delay_seconds = 5  # adjust based on how long login typically takes
@@ -215,20 +216,19 @@ def check_error_file():
 
 
 def scp_from_jasmin(local_directory, remote_directory_and_files):
-    # Build the scp command (exactly the one you want)
+
     cmd = (
-        "scp -v -o ProxyJump=jae35@login-03.jasmin.ac.uk "
+        "scp -v -o ProxyJump=jae35@login.jasmin.ac.uk "
         f"jae35@cylc2.jasmin.ac.uk:'{remote_directory_and_files}' "
         f"{shlex.quote(local_directory)}"
     )
 
     print(f"\n🔧 Running command:\n{cmd}\n")
 
-    # Run the command with live output (no capture)
     result = subprocess.run(cmd, shell=True)
 
     if result.returncode == 0:
-        print("\nFiles copied successfully!\n")
+        print("\nFiles copied successfully\n")
     else:
         print(f"\nscp failed with exit code {result.returncode}\n")
 
@@ -311,7 +311,14 @@ if task == 'ssh':
 
 if task == 'scp':
 
-    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw4/jae35/Umzim*.nc')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw4/jae35/Umzim*.nc')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '~/.subversion/servers')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw5/jae35/*.nc')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/setup_nic.sh')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/cylc-src/u-ck795/app/jules/rose-app.conf')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/cylc-src/u-ck795/rose-suite.conf')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw5/jae35/umz2010.nc')
+    scp_from_jasmin('/Users/jae35/Desktop', '/home/users/jae35/eleanor_twin/vary_params.ipynb')
 
 if task == 'process':
 
