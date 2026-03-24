@@ -35,7 +35,7 @@ def read_jules_m2(file_path, variable):
         var = ds[var_name]
         data_dict[var_name] = {'data': var.values, 'attrs': dict(var.attrs), 'dims': var.dims}
     #print(ds.keys())
-    examine_nc_file(file_path)
+    #examine_nc_file(file_path)
     array = data_dict[variable]['data']
     #print(data_dict[variable]['attrs'])
     long_name = data_dict[variable]['attrs'].get('long_name', 'unknown')
@@ -93,16 +93,16 @@ def examine_nc_file(file_path):
     try:
         # Open the NetCDF file
         nc = Dataset(file_path, 'r')
-        print(f"File: {file_path}")
-        print(f"Dimensions:")
+        #print(f"File: {file_path}")
+        #print(f"Dimensions:")
         for dim_name, dim in nc.dimensions.items():
             print(f"  {dim_name}: size = {len(dim)}, unlimited = {dim.isunlimited()}")
 
-        print(f"\nVariables:")
+        #print(f"\nVariables:")
         for var_name, var in nc.variables.items():
             print(f"  {var_name}: dimensions = {var.dimensions}, shape = {var.shape}, dtype = {var.dtype}")
 
-        print(f"\nGlobal attributes:")
+        #print(f"\nGlobal attributes:")
         for attr_name in nc.ncattrs():
             print(f"  {attr_name} = {getattr(nc, attr_name)}")
 

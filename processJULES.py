@@ -3,6 +3,7 @@ import numpy as np
 import plotPARAMS
 import readJULES
 import dataOPS
+import cftime
 import os
 
 
@@ -44,6 +45,7 @@ def compute_areal_mean(variable_array, variable_unit, lat2d, lon2d, lats, lons, 
 
 def compute_zonal_mean(variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
 
+    #print('shape: ', np.shape(variable_array))
     zonal_mean = np.nanmean(variable_array, axis=1)
     
     return zonal_mean
@@ -71,6 +73,7 @@ def write_processed_files():
 
     # Full 'time' array
     times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'time')
+    times = dataOPS.ensure_np_datetime(times)
     # Get the time dimension indices that fall within the desired year
     year_indices = np.where((times >= np.datetime64(f'{plotPARAMS.year}-01-01')) & (times < np.datetime64(f'{plotPARAMS.year + 1}-01-01')))[0]
 
@@ -94,6 +97,7 @@ def write_processed_files():
 
     #print('mesh shape: ', np.shape(lon2d))
 
+    # Loop through the variables listed in plotPARAMS
     for variable_name in plotPARAMS.variable_names:
         #print('var name: ', variable_name)
         # Variable to plot, its full array
@@ -101,16 +105,16 @@ def write_processed_files():
 
         variable_array = dataOPS.sanitize_extreme_values(variable_array)
 
-        print('var shape: ', np.shape(variable_array))
-        print('variable name: ', variable_name)
-        print(np.nanmax(variable_array))
+        #print('var shape: ', np.shape(variable_array))
+        #print('variable name: ', variable_name)
+        #print(np.nanmax(variable_array))
 
         # If the variable has a 'time' axis, trim it along the time axis to the desired year
-        if 'time' in variable_dims:
+        if 'time' in variable_dims and np.shape(variable_array)[0] > 12:
             time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
             variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
 
-        print('var shape2: ', np.shape(variable_array))
+        #print('var shape2: ', np.shape(variable_array))
 
         # Boolean mask to indicate which variable array axes contain non-lat/lon data
         # Example: [True True False False] indicates that axes 0 and 1 contain non-lat/lon data.
@@ -124,20 +128,22 @@ def write_processed_files():
         # Array providing the indices of the non-lat/lon variable axes
         # Example: [0 1] indicates that 'time' is contained in the 0th index, 'soil' in the 1st
         iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
-        print('idxs: ', iterable_dimension_idxs)
+
         # Array providing the the number of dimensions along each non-lat/lon axis
         # Example: [12 4] indicates that 'time' has 12 values and 'soil' has 4 values
         iterable_dimension_iter = np.array(np.shape(variable_array))[iterable_dimension_idxs]
-        print('iterable dim iter: ', iterable_dimension_iter)
+        #print('iterable dim iter: ', iterable_dimension_iter)
+        #stop
         # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
         # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
         indices = dataOPS.generate_indices(list(iterable_dimension_iter))
-        
+        #print('indices: ', indices)
         # Loop through each tuple (slice combo). Each combo makes a unique map.
-        print('indices: ', indices)
+        #print('indices: ', indices)
+
         for combo in indices:
 
-            print(variable_name, combo)
+            #print(variable_name, combo)
 
             key_labels = [str(plotPARAMS.year)]
             variable_array2 = np.copy(variable_array)

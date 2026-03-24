@@ -76,7 +76,7 @@ def make_tseries():
 
             # Get the name of the end-directory for the current t-series, so the code remembers where it belongs in the tree
             final_directory_path = '/'.join(fpath.split('/')[0:-1])
-            print('save here: ', final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif')
+            #print('save here: ', final_directory_path + '/' + final_directory_path.split('/')[-1] + '.gif')
 
             # Plot the t-series, colored to differentiate it from other t-series belonging to the variable
             label = dataOPS.remove_parenthetical_substrings(os.path.basename(os.path.dirname(fpath))).replace("p",".")
@@ -88,7 +88,7 @@ def make_tseries():
         out_path = os.path.join(out_dir, f"tseries_complete_{k}.png")
         plt.savefig(out_path, dpi=300)
         plt.close()
-        print('fig saved to: ', out_path)
+        #print('fig saved to: ', out_path)
 
 
 def make_animated_tseries():

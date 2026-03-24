@@ -301,7 +301,7 @@ def daily_to_monthly2(input_file, output_file):
 
     print(f"Monthly averages saved to {output_file}")
 
-task = 'ssh'
+task = 'scp'
 
 if task == 'ssh':
 
@@ -318,7 +318,8 @@ if task == 'scp':
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/cylc-src/u-ck795/app/jules/rose-app.conf')
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/cylc-src/u-ck795/rose-suite.conf')
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw5/jae35/umz2010.nc')
-    scp_from_jasmin('/Users/jae35/Desktop', '/home/users/jae35/eleanor_twin/vary_params.ipynb')
+    #scp_from_jasmin('/Users/jae35/Desktop', '/home/users/jae35/eleanor_twin/vary_params.ipynb')
+    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105', '/work/scratch-pw4/jae35/u-dk105/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.1707.nc')
 
 if task == 'process':
 

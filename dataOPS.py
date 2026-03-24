@@ -134,15 +134,18 @@ def latlon2area(lats, lons, latitude, longitude):
     import numpy as np
 
     # Ensure lats/lons spacing is scalar
-    if np.ndim(lats) > 1:
-        lat_sep = np.mean(np.diff(lats, axis=0))
-    else:
-        lat_sep = np.diff(lats)[0]
+    #if np.ndim(lats) > 1:
+    #    lat_sep = np.mean(np.diff(lats, axis=0))
+    #else:
+    #    lat_sep = np.diff(lats)[0]
 
-    if np.ndim(lons) > 1:
-        lon_sep = np.mean(np.diff(lons, axis=1))
-    else:
-        lon_sep = np.diff(lons)[0]
+    #if np.ndim(lons) > 1:
+    #    lon_sep = np.mean(np.diff(lons, axis=1))
+    #else:
+    #    lon_sep = np.diff(lons)[0]
+
+    lat_sep = get_spacing(lats, 0.25)
+    lon_sep = get_spacing(lons, 0.25)
 
     # Compute grid edges
     lat1 = np.clip(latitude - lat_sep / 2, -90, 90)
@@ -218,4 +221,52 @@ def check_if_rate(unit_string):
 
     return(is_a_rate)
 
+
+import numpy as np
+import cftime
+
+def ensure_np_datetime(times):
+    """
+    Convert a list/array of cftime objects to np.datetime64 only if needed.
+    If times are already datetime64 or datetime objects, return unchanged.
+    """
+    # Check the first element to detect cftime type
+    if len(times) == 0:
+        return np.array(times)  # empty array, nothing to do
+
+    first_elem = times[0]
+
+    if isinstance(first_elem, (cftime.DatetimeNoLeap,
+                               cftime.DatetimeGregorian,
+                               cftime.Datetime360Day,
+                               cftime.DatetimeProlepticGregorian)):
+        # Convert all cftime objects to np.datetime64
+        return np.array([np.datetime64(f"{t.year}-{t.month:02d}-{t.day:02d}") for t in times])
+    else:
+        # Already a datetime-like array
+        return np.array(times)
+    
+
+def get_spacing(arr, default_spacing):
+    arr = np.asarray(arr)
+    
+    if arr.ndim == 1:
+        # 1D array → take diff along the only axis if possible
+        if arr.size > 1:
+            return np.mean(np.diff(arr))
+        else:
+            return default_spacing
+    
+    elif arr.ndim == 2:
+        # 2D array → take diff along the non-singleton axis
+        if arr.shape[0] > 1:
+            return np.mean(np.diff(arr, axis=0))
+        elif arr.shape[1] > 1:
+            return np.mean(np.diff(arr, axis=1))
+        else:
+            return default_spacing
+    
+    else:
+        # Higher dims? just fallback to default
+        return default_spacing
 

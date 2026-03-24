@@ -1,5 +1,6 @@
 from scipy.interpolate import interp1d
 from matplotlib.patches import Patch
+import matplotlib.patheffects as pe
 from matplotlib import colormaps
 import matplotlib.pyplot as plt
 import processJULES
@@ -17,9 +18,17 @@ data_path, outp_path, file_name = plotPARAMS.data_path, plotPARAMS.outp_path, pl
 # Variable(s) and year to map
 variable_names, year = plotPARAMS.variable_names, plotPARAMS.year
 
+print(' ')
+print('Processing output...')
 processJULES.write_processed_files()
-plotMAPS.make_maps()
+print(' ')
+print('Making maps...')
+#plotMAPS.make_maps()
+print(' ')
+print('Making zonal plots...')
 plotZONAL.make_zonal()
+print(' ')
+print('Making time series...')
 #plotTSERIES.make_tseries()
 #plotMAPS.make_animated_maps()
 #plotZONAL.make_animated_zonal()

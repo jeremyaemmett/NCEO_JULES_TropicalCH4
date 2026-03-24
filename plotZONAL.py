@@ -1,8 +1,11 @@
+from matplotlib.patches import Rectangle
 from matplotlib.patches import Patch
-import matplotlib.colors as mcolors
+import matplotlib.patheffects as pe
+import matplotlib.colors as mcolor
 import cartopy.feature as cfeature
 import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
+from matplotlib import colors
 import cartopy.crs as ccrs
 import matplotlib.cm as cm
 import processJULES
@@ -41,11 +44,11 @@ def make_zonal():
     lat_spacing = np.diff(lats)[0]
 
     for unique_end_directory in unique_end_directories:
-        print(unique_end_directory)
+        #print(unique_end_directory)
         zonal_file = sysOPS.discover_files(unique_end_directory, '_zonalmean_tseries.txt')[0]
         areal_file = sysOPS.discover_files(unique_end_directory, '_arealmean_tseries.txt')[0]
         integ_file = sysOPS.discover_files(unique_end_directory, '_zonalintg_tseries.txt')[0]
-        print(integ_file)
+        #print(integ_file)
 
         # Recover the variable name from the file path
         parts = os.path.normpath(zonal_file).split(os.sep)
@@ -72,6 +75,13 @@ def make_zonal():
 
         integ_values_cumsum = np.cumsum(integ_values, axis=1)
 
+        if integ_values.ndim == 1:
+            integ_values_cumsum = integ_values  # 1D, just return as-is
+        elif integ_values.ndim == 2:
+            integ_values_cumsum = np.cumsum(integ_values, axis=1)  # sum along time, sometimes need axis=0
+        else:
+            raise ValueError(f"Unexpected shape: {integ_values.shape}")
+
         # Assuming lats is your latitude array with length 100
         X, Y = np.meshgrid(np.arange(zonal_values.shape[1]) , lats)  # shape (100, 12)
 
@@ -85,24 +95,56 @@ def make_zonal():
         #c = ax1.contourf(X, Y, zonal_values_trimmed, levels=20, cmap='magma')
         c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto', alpha=0.85)
 
+        # Get colormap
+        num_layers = zonal_values.shape[1]
+        cmap = cm.get_cmap('managua', num_layers)
+
         plot_title = "  Zonal and full-region means"
         ax1.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
         ax1.set_ylabel("Latitude", fontsize=18)
-        months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+        #print('shape: ', zonal_values.shape)
         ax1.set_xticks(np.arange(zonal_values.shape[1]))
-        ax1.set_xticklabels(months, fontsize=16)
-        ax1.tick_params(axis='both', which='major', labelsize=14)
+        ax1.set_xticklabels(months, fontsize=18)
+
+        for i in range(num_layers):
+            rect = Rectangle(
+                (i - 0.5, -0.14),   # start at left edge of each month bin
+                1.0,                # width = one month
+                0.11,               # height of strip
+                transform=ax1.get_xaxis_transform(),  # x=data, y=axes
+                color=cmap(i),
+                alpha=0.6,
+                clip_on=False,
+                zorder=0
+            )
+            ax1.add_patch(rect)
+
+        # Apply colors
+        for i, label in enumerate(ax1.get_xticklabels()):
+            label.set_color('black')
+            #label.set_fontweight('bold')
+            #label.set_path_effects([
+            #    pe.Stroke(linewidth=5.0, foreground='white'),
+            #    pe.Normal()])
+            label.set_rotation(0)
+            label.set_ha('center')  # important for clean alignment
+            label.set_y(-0.03)  # default ~0, negative moves down
+            label.set_fontname('DejaVu Sans')
+            label.set_fontstyle('italic')
+
+        ax1.tick_params(axis='both', which='major', labelsize=20)
         #ax1.grid(True)
         ax1.spines['top'].set_visible(False)
         ax1.spines['right'].set_visible(False)
-        cb = plt.colorbar(c, orientation='vertical', pad=0.10, shrink=0.8)
+        cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
         cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
         cb.ax.set_title(" ", fontsize=18)  
         cb.ax.tick_params(labelsize=14)
-        for i in range(1, zonal_values.shape[1]):
-            if (i)%3 == 0:
-                ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
-                ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
+        #for i in range(1, zonal_values.shape[1]):
+        #    if (i)%3 == 0:
+        #        ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
+        #        ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
 
         ax_areal_mean = ax1.twinx()
         ax_areal_mean.plot(areal_values, linewidth=8.0, color='white')
@@ -124,13 +166,9 @@ def make_zonal():
         # cumulative sum along columns
         cumulative = np.cumsum(zonal_values, axis=1)  # shape: (lat, num_curves)
 
-        # Get colormap
-        num_layers = cumulative.shape[1]
-        cmap = cm.get_cmap('viridis', num_layers)
-
         # Fill between subsequent layers
-        for i in range(1, num_layers):
-            ax2.plot(zonal_values[:, i], lats, color=cmap(i), label=f"Layer {i}", linewidth=3.0)
+        for i in range(0, num_layers):
+            ax2.plot(zonal_values[:, i], lats, color=cmap(i), label=f"Layer {i}", linewidth=6.0, alpha=0.6)
 
 
         if is_rate:
@@ -142,23 +180,52 @@ def make_zonal():
             plot_title = "  Zonal and full-region cumulative"
             ax3.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
             ax3.set_ylabel("Latitude", fontsize=18)
-            months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            ax3.set_xticks(np.arange(zonal_values.shape[1]))
-            ax3.set_xticklabels(months, fontsize=16)
-            ax3.tick_params(axis='both', which='major', labelsize=14)
+            months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
+            # Set ticks first
+            ax3.set_xticks(np.arange(len(months)))
+            ax3.set_xticklabels(months)  # do NOT pass fontsize here
+
+            # Add month-colored rectangles
+            for i in range(num_layers):
+                rect = Rectangle(
+                    (i - 0.5, -0.14),  # align with tick
+                    1.0,               # width = 1 month
+                    0.11,              # height of strip
+                    transform=ax3.get_xaxis_transform(),
+                    color=cmap(i),
+                    alpha=0.6,
+                    clip_on=False,
+                    zorder=0
+                )
+                ax3.add_patch(rect)
+
+            # Now customize tick labels
+            for i, label in enumerate(ax3.get_xticklabels()):
+                label.set_color('black')
+                #label.set_fontweight('bold')
+                #label.set_path_effects([
+                #    pe.Stroke(linewidth=5.0, foreground='white'),
+                #    pe.Normal()])
+                label.set_rotation(0)
+                label.set_ha('center')  # important for clean alignment
+                label.set_y(-0.03)  # default ~0, negative moves down
+                label.set_fontname('DejaVu Sans')
+                label.set_fontstyle('italic')
+
+            ax3.tick_params(axis='both', which='major', labelsize=20)
             #ax1.grid(True)
             ax3.spines['top'].set_visible(False)
             ax3.spines['right'].set_visible(False)
-            cb = plt.colorbar(c, orientation='vertical', pad=0.10, shrink=0.8)
+            cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
             #cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
             cb.set_label(dataOPS.cleanup_exponents("kg") + ' / ' + str(lat_spacing) + '\u00B0' + ' lat', fontsize=18)
             cb.ax.set_title(" ", fontsize=18)  
             cb.ax.tick_params(labelsize=14)
             cb.ax.yaxis.get_offset_text().set_fontsize(14)
-            for i in range(1, zonal_values.shape[1]):
-                if (i)%3 == 0:
-                    ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
-                    ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
+            #for i in range(1, zonal_values.shape[1]):
+            #    if (i)%3 == 0:
+            #        ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
+            #        ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
 
             ax_zonal_intg = ax3.twinx()
             ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=8.0, color='white')
@@ -181,22 +248,40 @@ def make_zonal():
 
             # Get colormap
             num_layers = cumulative.shape[1]
-            cmap = cm.get_cmap('viridis', num_layers)
+            cmap = cm.get_cmap('managua', num_layers)
 
             # First fill: from zero to first layer
-            ax4.fill_betweenx(lats, 0, cumulative[:, 0], color=cmap(0), label="Layer 0")
+            ax4.fill_betweenx(lats, 0, cumulative[:, 0], color=cmap(0), label="Layer 0", alpha=0.6)
 
             # Fill between subsequent layers
             for i in range(1, num_layers):
                 lower = cumulative[:, i - 1]
                 upper = cumulative[:, i]
-                ax4.fill_betweenx(lats, lower, upper, color=cmap(i), label=f"Layer {i}")
-                if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='black', linestyle='-', linewidth = 3.0)
-                if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='white', linestyle='-', linewidth = 1.0)
+                ax4.fill_betweenx(lats, lower, upper, color=cmap(i), label=f"Layer {i}", alpha=0.6)
+                #if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='black', linestyle='-', linewidth = 3.0)
+                #if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='white', linestyle='-', linewidth = 1.0)
                 #if i == 5: ax2.plot(upper, lats, color='gray', linestyle='-', linewidth = 2.0)
 
-        legend_handles = [Patch(facecolor=cmap(i), label=months[i]) for i in range(num_layers)]
-        ax2.legend(handles=legend_handles, title=" ", loc='upper left', fontsize=14, title_fontsize=16, ncol=1, borderaxespad=0, bbox_to_anchor=(1.05, 1), frameon=False)
+        #legend_handles = [Patch(facecolor=cmap(i), label=months[i]) for i in range(num_layers)]
+        #ax2.legend(handles=legend_handles, title=" ", loc='upper left', fontsize=14, title_fontsize=16, ncol=1, borderaxespad=0, bbox_to_anchor=(1.05, 1), frameon=False)
+
+        ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
+        ax2.tick_params(axis='both', which='major', labelsize=14)
+        ax2.spines['top'].set_visible(False)
+        ax2.spines['right'].set_visible(False)
+        ax2.set_facecolor(colors.to_rgba('gainsboro', alpha=0.5))
+
+        # <-- remove y-ticks and labels here
+        ax2.set_yticks([])
+
+        # ... same for ax4
+        ax4.set_ylim([np.nanmin(lats), np.nanmax(lats)])
+        ax4.tick_params(axis='both', which='major', labelsize=14)
+        ax4.spines['top'].set_visible(False)
+        ax4.spines['right'].set_visible(False)
+        ax4.set_facecolor(colors.to_rgba('gainsboro', alpha=0.5))
+        ax4.set_yticks([])
+        ax4.set_ylabel(' \n \n \n')
 
         plt.tight_layout()
         #plt.show()
@@ -258,7 +343,7 @@ def make_animated_zonal():
             #ax1.grid(True)
             ax1.spines['top'].set_visible(False)
             ax1.spines['right'].set_visible(False)
-            cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
+            cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
             cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
             cb.ax.set_title(" ", fontsize=18)  
             cb.ax.tick_params(labelsize=14)
@@ -281,7 +366,7 @@ def make_animated_zonal():
 
             # Get colormap
             num_layers = cumulative.shape[1]
-            cmap = cm.get_cmap('viridis', num_layers)
+            cmap = cm.get_cmap('managua', num_layers)
 
             # First fill: from zero to first layer
             ax2.fill_betweenx(lats, 0, cumulative[:, 0], color=cmap(0), label="Layer 0")
@@ -291,12 +376,12 @@ def make_animated_zonal():
                 lower = cumulative[:, i - 1]
                 upper = cumulative[:, i]
                 ax2.fill_betweenx(lats, lower, upper, color=cmap(i), label=f"Layer {i}")
-                if (i+1)%3 == 0 and i != num_layers-1: ax2.plot(upper, lats, color='black', linestyle='-', linewidth = 3.0)
-                if (i+1)%3 == 0 and i != num_layers-1: ax2.plot(upper, lats, color='white', linestyle='-', linewidth = 1.0)
+                #if (i+1)%3 == 0 and i != num_layers-1: ax2.plot(upper, lats, color='black', linestyle='-', linewidth = 3.0)
+                #if (i+1)%3 == 0 and i != num_layers-1: ax2.plot(upper, lats, color='white', linestyle='-', linewidth = 1.0)
                 #if i == 5: ax2.plot(upper, lats, color='gray', linestyle='-', linewidth = 2.0)
 
             legend_handles = [Patch(facecolor=cmap(i), label=months[i]) for i in range(num_layers)]
-            ax2.legend(handles=legend_handles, title=" ", loc='upper left', fontsize=14, title_fontsize=16, ncol=1, borderaxespad=0, bbox_to_anchor=(1.05, 1), frameon=False)
+            ax2.legend(handles=legend_handles, title=" ", loc='upper left', fontsize=14, title_fontsize=16, ncol=1, borderaxespad=0, bbox_to_anchor=(1.05, 1), frameon=False, columnspacing=2.0)
 
             plt.tight_layout()
             #plt.show()

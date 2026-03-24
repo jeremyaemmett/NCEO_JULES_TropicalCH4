@@ -1,3 +1,6 @@
+import matplotlib.patheffects as PathEffects
+import cartopy.io.shapereader as shpreader
+import cartopy.io.img_tiles as cimgt
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
@@ -5,6 +8,7 @@ import processJULES
 import numpy as np
 import plotPARAMS
 import readJULES
+import rasterio
 import dataOPS
 import sysOPS
 import os
@@ -14,6 +18,7 @@ def make_maps():
 
     # Full 'time' array
     times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'time')
+    times = dataOPS.ensure_np_datetime(times)
     # Get the time dimension indices that fall within the desired year
     year_indices = np.where((times >= np.datetime64(f'{plotPARAMS.year}-01-01')) & (times < np.datetime64(f'{plotPARAMS.year + 1}-01-01')))[0]
 
@@ -35,7 +40,10 @@ def make_maps():
     
     lon2d, lat2d = np.meshgrid(lons, lats)
 
+    print(' ')
     for variable_name in plotPARAMS.variable_names:
+
+        print(' var: ', variable_name)
 
         # Variable to plot, its full array
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, variable_name)
@@ -47,13 +55,13 @@ def make_maps():
         if np.isnan(variable_global_min) and np.isnan(variable_global_max):
             variable_global_min, variable_global_max = -1.0, 1.0
 
-        print('global')
-        print('test: ', variable_global_min == np.nan and variable_global_max == np.nan)
-        print(variable_name)
-        print(variable_global_min, variable_global_max)
+        #print('global')
+        #print('test: ', variable_global_min == np.nan and variable_global_max == np.nan)
+        #print(variable_name)
+        #print(variable_global_min, variable_global_max)
 
         # If the variable has a 'time' axis, trim it along the time axis to the desired year
-        if 'time' in variable_dims:
+        if 'time' in variable_dims and np.shape(variable_array)[0] > 12:
             time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
             variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
 
@@ -76,7 +84,7 @@ def make_maps():
         # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
         # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
         indices = dataOPS.generate_indices(list(iterable_dimension_iter))
-        
+
         # Loop through each tuple (slice combo). Each combo makes a unique map.
         for combo in indices:
 
@@ -134,39 +142,65 @@ def make_animated_maps():
         sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans'])
 
 
-def world_map(lats, lons):
-
-    """Create a world map, given latitude and longitude coordinates
-    Args:
-        lats (float): 1D array of latitude coordinates
-        lons (float): 1D array of longitude coordinates
-    Returns:
-        fig (matplotlib.figure.Figure object): A matplotlib figure
-        ax (matplotlib.axes._axes.Axes object): A matplotlib axis
+def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     """
+    Create a world map with shaded topography, rivers, borders, and country labels.
+    """
+    # Map extents
+    lon_min, lon_max = np.min(lons)-1.5, np.max(lons)+1.5
+    lat_min, lat_max = np.min(lats)-1.5, np.max(lats)+1.5
 
-    # Add some extra space to the map edges
-    lon_min, lon_max, lat_min, lat_max = np.min(lons)-2.5, np.max(lons)+2.5, np.min(lats)-2.5, np.max(lats)+2.5
-    #lon_min, lon_max, lat_min, lat_max = plotPARAMS.lon_min, plotPARAMS.lon_max, plotPARAMS.lat_min, plotPARAMS.lat_max
-
-    # Figure size
-    #scale = 0.1
-    #map_width, map_height = lon_max - lon_min, lat_max - lat_min
-    #fig_width, fig_height = map_width*scale, map_height*scale
-    #fig = plt.figure(figsize=(fig_width, fig_height))
+    # Figure and axis
     fig = plt.figure(figsize=(10, 6))
     ax = plt.axes(projection=ccrs.PlateCarree())
-    ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+    ax.set_extent([lon_min, lon_max, lat_min, lat_max])
 
-    # Topography, details
-    ax.coastlines()
-    ax.add_feature(cfeature.LAND, facecolor='lightgray')
-    ax.add_feature(cfeature.OCEAN, facecolor='white')
+    # --- Overlay topographic shading from DEM ---
+    #try:
+    #    with rasterio.open(dem_path) as src:
+    #        topo = src.read(1)
+    #        extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
+    #        ax.imshow(topo, extent=extent, transform=ccrs.PlateCarree(),
+    #                  cmap='gist_earth', alpha=0.5, zorder=0)
+    #except Exception as e:
+    #    print(f"Warning: Could not load DEM for shading: {e}")
+
+    # --- Base layers ---
+    ax.add_feature(cfeature.LAND, facecolor='lightgray', zorder=1)
+    ax.add_feature(cfeature.OCEAN, facecolor='white', zorder=1)
+    ax.add_feature(cfeature.RIVERS.with_scale('50m'), edgecolor='blue', linewidth=0.5, zorder=2)
+    ax.add_feature(cfeature.BORDERS.with_scale('50m'), linewidth=1.2, zorder=3, edgecolor='gray')
+    ax.coastlines(resolution='50m', zorder=4)
+
+    # --- Gridlines ---
     gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
     gl.top_labels = False
     gl.right_labels = False
-    gl.xlabel_style = {'fontsize': 16}  # Longitude labels
-    gl.ylabel_style = {'fontsize': 16}  # Latitude labels
+    gl.xlabel_style = {'fontsize': 16}
+    gl.ylabel_style = {'fontsize': 16}
+
+    # --- Country labels ---
+    shpfilename = shpreader.natural_earth(
+        resolution='110m', category='cultural', name='admin_0_countries'
+    )
+    reader = shpreader.Reader(shpfilename)
+
+    for record in reader.records():
+        geom = record.geometry
+        centroid = geom.centroid
+        if (lon_min <= centroid.x <= lon_max and lat_min <= centroid.y <= lat_max):
+            txt = ax.text(
+                centroid.x, centroid.y, record.attributes['NAME'],
+                fontsize=country_fontsize, fontweight='bold',
+                fontstyle='italic',      # keep italic if desired
+                fontfamily='sans-serif', # keep family if needed
+                transform=ccrs.PlateCarree(),
+                ha='center', va='center', color='black'
+            )
+            # Add white outline around text
+            txt.set_path_effects([
+                PathEffects.withStroke(linewidth=2, foreground='lightgray')
+            ])
 
     return fig, ax
 
@@ -187,7 +221,7 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
 
     vmin, vmax = variable_global_min, variable_global_max
 
-    print('vmin, vmax: ', vmin, vmax)
+    #print('vmin, vmax: ', vmin, vmax)
 
     n_levels = 10
 
@@ -198,7 +232,7 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     vmin_r = np.floor(vmin / step) * step
     vmax_r = np.ceil(vmax / step) * step
 
-    print('var: ', variable_name)
+    #print('var: ', variable_name)
     levels = np.arange(vmin_r, vmax_r + step/2, step)
 
     c = ax.contourf(lon2d, lat2d, variable_array,
@@ -214,3 +248,8 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     
     ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=18)
     ax.text(np.min(lon2d)-1, np.min(lat2d)-1, dataOPS.remove_parenthetical_substrings(subtitle), fontsize=18, color='black', ha='left', va='bottom', style='italic')
+
+
+def add_hillshade(ax):
+    tiler = cimgt.Stamen('terrain-background')  # or 'terrain'
+    ax.add_image(tiler, 6, zorder=0)  # 6 is zoom level, adjust for resolution
