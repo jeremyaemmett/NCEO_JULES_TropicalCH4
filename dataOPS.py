@@ -1,4 +1,8 @@
+import xarray as xr
 import numpy as np
+import plotPARAMS
+import readJULES
+import os
 
 
 def generate_indices(shape):
@@ -168,6 +172,54 @@ def latlon2area(lats, lons, latitude, longitude):
     return box_area
 
 
+def latlon2area2(latitude, longitude):
+    """
+    Compute the surface area of a gridbox centered on a given latitude/longitude.
+
+    Args:
+        lats / lons (1D or 2D arrays): latitude and longitude arrays
+        latitude / longitude (float or 2D array): location(s) where area is desired
+
+    Returns:
+        box_area (float or array): Surface area of the gridbox (same shape as latitude/longitude)
+    """
+    import numpy as np
+
+    # Ensure lats/lons spacing is scalar
+    #if np.ndim(lats) > 1:
+    #    lat_sep = np.mean(np.diff(lats, axis=0))
+    #else:
+    #    lat_sep = np.diff(lats)[0]
+
+    #if np.ndim(lons) > 1:
+    #    lon_sep = np.mean(np.diff(lons, axis=1))
+    #else:
+    #    lon_sep = np.diff(lons)[0]
+
+    lat_sep = get_spacing(latitude[:, 0], 0.25)
+    lon_sep = get_spacing(longitude[0, :], 0.25)
+
+    # Compute grid edges
+    lat1 = np.clip(latitude - lat_sep / 2, -90, 90)
+    lat2 = np.clip(latitude + lat_sep / 2, -90, 90)
+    lon1 = longitude - lon_sep / 2
+    lon2 = longitude + lon_sep / 2
+
+    # Convert to radians
+    lat1 = np.deg2rad(lat1)
+    lat2 = np.deg2rad(lat2)
+    lon1 = np.deg2rad(lon1)
+    lon2 = np.deg2rad(lon2)
+
+    # Earth radius in meters
+    r_earth = 6.378e6
+
+    # Area formula
+    box_area = (r_earth ** 2) * (np.sin(lat2) - np.sin(lat1)) * (lon2 - lon1)
+
+    return box_area
+
+
 def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):
 
     """Mask mesh-gridded latitudes and longitudes to flag those lying within a specified box-shaped region
@@ -269,4 +321,204 @@ def get_spacing(arr, default_spacing):
     else:
         # Higher dims? just fallback to default
         return default_spacing
+    
 
+def serial2rect():
+    # Read time
+    times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(
+        plotPARAMS.data_path + plotPARAMS.file_name, 'time')
+
+    # Convert to comparable values (assume times are datetime64-like or comparable)
+    year_indices = [i for i, t in enumerate(times)
+                    if f"{plotPARAMS.year}-01-01" <= str(t) < f"{plotPARAMS.year + 1}-01-01"]
+
+    # Read header
+    header = readJULES.read_jules_header(plotPARAMS.data_path + plotPARAMS.file_name)
+    dimension_keys, variable_keys = list(header[0]), list(header[1])
+
+    # Determine lat/lon variable names
+    if 'latitude' in variable_keys and 'longitude' in variable_keys:
+        lat_string, lon_string = 'latitude', 'longitude'
+    elif 'lat' in variable_keys and 'lon' in variable_keys:
+        lat_string, lon_string = 'lat', 'lon'
+    else:
+        raise ValueError("Cannot find latitude and longitude variables.")
+
+    # Determine lat/lon dimension keys
+    if 'lat' in dimension_keys and 'lon' in dimension_keys:
+        lat_key, lon_key = 'lat', 'lon'
+    elif 'y' in dimension_keys and 'x' in dimension_keys:
+        lat_key, lon_key = 'y', 'x'
+    else:
+        raise ValueError("Cannot find latitude and longitude dimensions.")
+
+    # Read lat/lon arrays
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(
+        plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(
+        plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
+
+    # Check if serialized
+    serialized = len(lats) != 0 and (len(lats_dims) == 1 or 1 in [len(lats) if hasattr(lats, '__len__') else 0])
+
+    if not serialized:
+        print("Data already on a grid")
+        return
+
+    # Determine unique lat/lon values
+    lat_unique = sorted(list(set([float(x) for x in lats])))
+    lon_unique = sorted(list(set([float(x) for x in lons])))
+
+    ny, nx = len(lat_unique), len(lon_unique)
+
+    # Prepare grid dictionary
+    rect_data = {}
+
+    for var in variable_keys:
+        data, units, long_name, dims = readJULES.read_jules_m2(
+            plotPARAMS.data_path + plotPARAMS.file_name, var)
+
+        # Subset time if exists
+        if 'time' in dims:
+            time_idx = dims.index('time')
+            data = [[row[i] for i in year_indices] if isinstance(row[0], list) else [row[i] for i in year_indices] for row in data]
+
+        # Initialize grid with NaNs
+        grid_shape = (len(year_indices), ny, nx) if 'time' in dims else (ny, nx)
+        grid = [[[float('nan')]*nx for _ in range(ny)] for _ in range(len(year_indices))] if 'time' in dims else [[float('nan')]*nx for _ in range(ny)]
+
+        # Map serialized points to grid
+        lat_inds = [lat_unique.index(float(lat)) for lat in lats]
+        lon_inds = [lon_unique.index(float(lon)) for lon in lons]
+
+        if 'time' in dims:
+            for t_idx, t in enumerate(year_indices):
+                for p_idx, (i, j) in enumerate(zip(lat_inds, lon_inds)):
+                    try:
+                        grid[t_idx][i][j] = data[t_idx][p_idx]
+                    except IndexError:
+                        pass
+        else:
+            for p_idx, (i, j) in enumerate(zip(lat_inds, lon_inds)):
+                try:
+                    grid[i][j] = data[p_idx]
+                except IndexError:
+                    pass
+
+        rect_data[var] = grid
+
+    rect_data['latitude'] = lat_unique
+    rect_data['longitude'] = lon_unique
+    rect_data['time'] = [times[i] for i in year_indices]
+
+    return rect_data
+
+
+def write_unserialized_netcdf():
+
+    input_file = plotPARAMS.data_path + plotPARAMS.file_name
+    output_file = plotPARAMS.data_path + plotPARAMS.file_name + "_filled.nc"
+
+    # --- Header ---
+    header = readJULES.read_jules_header(input_file)
+    dimension_keys, variable_keys = list(header[0]), list(header[1])
+
+    # --- Detect coordinate names ---
+    if 'latitude' in variable_keys and 'longitude' in variable_keys:
+        lat_string, lon_string = 'latitude', 'longitude'
+    elif 'lat' in variable_keys and 'lon' in variable_keys:
+        lat_string, lon_string = 'lat', 'lon'
+
+    if 'lat' in dimension_keys and 'lon' in dimension_keys:
+        lat_key, lon_key = 'lat', 'lon'
+    elif 'y' in dimension_keys and 'x' in dimension_keys:
+        lat_key, lon_key = 'y', 'x'
+
+    # --- Read coordinates ---
+    lats, _, _, _ = readJULES.read_jules_m2(input_file, lat_string)
+    lons, _, _, _ = readJULES.read_jules_m2(input_file, lon_string)
+
+    # --- Fill gaps in latitude and longitude ---
+    def fill_gaps(arr):
+        arr_filled = arr.copy()
+        # Row-wise
+        for i in range(arr_filled.shape[0]):
+            row = arr_filled[i, :]
+            nans = np.isnan(row)
+            if np.any(nans):
+                valid = np.where(~nans)[0]
+                if valid.size > 0:
+                    row[nans] = np.interp(np.flatnonzero(nans), valid, row[valid])
+                arr_filled[i, :] = row
+        # Column-wise
+        for j in range(arr_filled.shape[1]):
+            col = arr_filled[:, j]
+            nans = np.isnan(col)
+            if np.any(nans):
+                valid = np.where(~nans)[0]
+                if valid.size > 0:
+                    col[nans] = np.interp(np.flatnonzero(nans), valid, col[valid])
+                arr_filled[:, j] = col
+        return arr_filled
+
+    lats_filled = fill_gaps(lats)
+    lons_filled = fill_gaps(lons)
+
+    # --- Create dataset ---
+    ds_out = xr.Dataset()
+    ds_out[lat_key] = (('y', 'x'), lats_filled)
+    ds_out[lon_key] = (('y', 'x'), lons_filled)
+    ds_out[lat_key].attrs['units'] = 'degrees_north'
+    ds_out[lon_key].attrs['units'] = 'degrees_east'
+
+    # --- Process variables ---
+    for var_name in variable_keys:
+        print("Processing:", var_name)
+        var, unit, long_name, dims = readJULES.read_jules_m2(input_file, var_name)
+
+        if 'bounds' in var_name.lower():
+            ds_out[var_name] = (dims, var)
+            continue
+
+        # Sanitize numeric arrays
+        try:
+            if np.issubdtype(np.asarray(var).dtype, np.number):
+                var = sanitize_extreme_values(var)
+        except:
+            pass
+
+        # Identify spatial axes
+        lat_axis = dims.index(lat_key) if lat_key in dims else None
+        lon_axis = dims.index(lon_key) if lon_key in dims else None
+
+        if lat_axis is None or lon_axis is None:
+            ds_out[var_name] = (dims, var)
+            continue
+
+        # Extra axes
+        extra_axes = [i for i in range(len(dims)) if i not in [lat_axis, lon_axis]]
+        extra_shape = [var.shape[i] for i in extra_axes]
+
+        # Initialize output array
+        Ny, Nx = lats_filled.shape
+        var_grid = np.full(extra_shape + [Ny, Nx], np.nan)
+
+        # Map serialized variable to grid if same size as flattened coords
+        flat_vals = var.flatten()
+        if flat_vals.size == lats.size:
+            for i in range(flat_vals.size):
+                yi, xi = np.unravel_index(i, lats.shape)
+                var_grid[(slice(None),)*len(extra_shape) + (yi, xi)] = flat_vals[i]
+
+        new_dims = [dims[i] for i in extra_axes] + [lat_key, lon_key]
+        ds_out[var_name] = (new_dims, var_grid)
+        try:
+            ds_out[var_name].attrs['units'] = unit
+            ds_out[var_name].attrs['long_name'] = long_name
+        except:
+            pass
+
+    # --- Save ---
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    ds_out.to_netcdf(output_file)
+    print("Written:", output_file)

@@ -16,6 +16,9 @@ import os
 
 def make_maps():
 
+    # Clear all .txt files in the output path
+    [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(plotPARAMS.outp_path) for f in fn if f.endswith('.txt')]
+
     # Full 'time' array
     times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'time')
     times = dataOPS.ensure_np_datetime(times)
@@ -35,44 +38,31 @@ def make_maps():
     lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
     lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
     
-    if lats.ndim == 2 and all(dim > 1 for dim in lats.shape):
-        coords_type = '2d'
-    elif np.ndim(lats) == 1 or 1 in lats.shape:
-        coords_type = '1d'
+    # Flatten 1D arrays and infer grid
+    lats_flat = lats.flatten()
+    lons_flat = lons.flatten()
+    lats_unique = np.sort(np.unique(lats_flat))
+    lons_unique = np.sort(np.unique(lons_flat))
+    dlat = np.median(np.diff(lats_unique))
+    dlon = np.median(np.diff(lons_unique))
+    lat_grid = np.arange(lats_unique.min(), lats_unique.max() + dlat/2, dlat)
+    lon_grid = np.arange(lons_unique.min(), lons_unique.max() + dlon/2, dlon)
+    Ny, Nx = len(lat_grid), len(lon_grid)
+    lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid)
+    lat_idx = ((lats_flat - lat_grid[0]) / dlat).round().astype(int)
+    lon_idx = ((lons_flat - lon_grid[0]) / dlon).round().astype(int)
+    lat2d, lon2d = np.meshgrid(lat_grid, lon_grid, indexing='ij')
 
     print('Lats: ', lats)
     print('Lons: ', lons)
-    print('Coords type: ', coords_type)
-
-    # After reading lats/lons
-    if coords_type == '1d':
-        lats_flat = lats.flatten()
-        lons_flat = lons.flatten()
-        lats_unique = np.sort(np.unique(lats_flat))
-        lons_unique = np.sort(np.unique(lons_flat))
-        dlat = np.median(np.diff(lats_unique))
-        dlon = np.median(np.diff(lons_unique))
-        lat_grid = np.arange(lats_unique.min(), lats_unique.max() + dlat/2, dlat)
-        lon_grid = np.arange(lons_unique.min(), lons_unique.max() + dlon/2, dlon)
-        Ny, Nx = len(lat_grid), len(lon_grid)
-        lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid)
-        lat_idx = ((lats_flat - lat_grid[0]) / dlat).round().astype(int)
-        lon_idx = ((lons_flat - lon_grid[0]) / dlon).round().astype(int)
-        lat2d, lon2d = np.meshgrid(lat_grid, lon_grid, indexing='ij')
-        print('Coords are serialized with inferred lat/lon resolution: ', dlat, dlon)
-
-    elif coords_type == '2d':
-        # extract 1D vectors for plotting
-        lats, lons = lats[:, 0], lons[0, :]
-        lon2d, lat2d = np.meshgrid(lons, lats)
-        Ny, Nx = len(lats), len(lons)
+    print('Coords are serialized with inferred lat/lon resolution: ', dlat, dlon)
 
     print(' ')
+    # Loop through variables
     for variable_name in plotPARAMS.variable_names:
+        print('Processing variable:', variable_name)
 
-        print('var: ', variable_name)
-
-        # 1. Read the full variable array
+        # 1. Read variable
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(
             plotPARAMS.data_path + plotPARAMS.file_name, variable_name
         )
@@ -80,111 +70,82 @@ def make_maps():
         # 2. Sanitize extreme values
         variable_array = dataOPS.sanitize_extreme_values(variable_array)
 
-        # 3. Map 1D variables onto the regular grid
-        if coords_type == '1d':
-            time_steps = variable_array.shape[0]  # e.g., months
-            var_grid = np.full((time_steps, Ny, Nx), np.nan)
+        # 3. Map 1D variable to grid
+        lat_axis = variable_dims.index(lat_key) if lat_key in variable_dims else None
+        lon_axis = variable_dims.index(lon_key) if lon_key in variable_dims else None
+        
+        extra_axes = [i for i in range(len(variable_dims)) if i not in [lat_axis, lon_axis]]
+        extra_shape = [variable_array.shape[i] for i in extra_axes]
+        var_grid = np.full(extra_shape + [Ny, Nx], np.nan)
+        
+        # Loop through extra dimensions e.g. layer, soil type, etc.
+        for idx in np.ndindex(*extra_shape):
+            orig_idx = list(idx)
+            if lat_axis is not None:
+                orig_idx.insert(lat_axis if lat_axis < len(orig_idx) else len(orig_idx), slice(None))
+            if lon_axis is not None:
+                orig_idx.insert(lon_axis if lon_axis < len(orig_idx) else len(orig_idx), slice(None))
+            
+            flat_values = variable_array[tuple(orig_idx)].flatten()
+            if flat_values.size != lat_idx.size:
+                raise ValueError(f"Mismatch between flat_values ({flat_values.size}) and lat/lon points ({lat_idx.size})")
+            
+            var_grid[idx + (lat_idx, lon_idx)] = flat_values
 
-            for t in range(time_steps):
-                # Flatten in case it has shape (1, n_points) or (n_points,)
-                values = variable_array[t].flatten()
-                var_grid[t, lat_idx, lon_idx] = values
+        variable_array = var_grid
+        print('Variable gridded shape:', variable_array.shape)
 
-            # Replace the original array with the gridded one
-            variable_array = var_grid
+        # 4. Trim time to desired year
+        if 'time' in variable_dims and variable_array.shape[0] > 12:
+            time_dim_index = np.where(np.array(variable_dims) == 'time')[0][0]
+            variable_array = np.take(variable_array, indices=year_indices, axis=time_dim_index)
 
-            # Create proper 2D meshgrid for plotting
-            lon2d, lat2d = np.meshgrid(lon_grid, lat_grid)
-
-        # 4. For 2D, variable_array is already a grid (time, Ny, Nx)
-        elif coords_type == '2d':
-            # Extract 1D lats/lons and create 2D meshgrid
-            lats_1d, lons_1d = lats[:, 0], lons[0, :]
-            lat2d, lon2d = np.meshgrid(lats_1d, lons_1d, indexing='ij')
-
-            # If variable_array has shape (time, Ny, Nx), ensure it matches meshgrid
-            if variable_array.ndim == 2:
-                variable_array = variable_array[np.newaxis, :, :]
-
-        print(f"{variable_name} gridded shape: {variable_array.shape}")
-
-        # 5. At this point, variable_array is ready to plot or process
-        print(f"{variable_name} gridded shape: {variable_array.shape}")
-
-        #variable_global_min, variable_global_max = np.nanmin(variable_array), np.nanmax(variable_array)
-        variable_global_min, variable_global_max = dataOPS.globalMinMax(variable_array, variable_unit)
-        if np.isnan(variable_global_min) and np.isnan(variable_global_max):
-            variable_global_min, variable_global_max = -1.0, 1.0
-
-        #print('global')
-        #print('test: ', variable_global_min == np.nan and variable_global_max == np.nan)
-        #print(variable_name)
-        #print(variable_global_min, variable_global_max)
-
-        # If the variable has a 'time' axis, trim it along the time axis to the desired year
-        if 'time' in variable_dims and np.shape(variable_array)[0] > 12:
-            time_dimension_index = np.where(np.array(variable_dims) == 'time')[0][0]
-            variable_array = np.take(variable_array, indices=year_indices, axis=time_dimension_index)
-
-        # Boolean mask to indicate which variable array axes contain non-lat/lon data
-        # Example: [True True False False] indicates that axes 0 and 1 contain non-lat/lon data.
+        # 5. Generate slice indices for additional dimensions
         iterable_dimension_mask = ~np.isin(list(variable_dims), [lon_key, lat_key])
-
-        # Array providing the labels (keys) of the non-lat/lon axes
-        # Example: ['time' 'soil'] indicates that the array contains 'time' (month) and 'soil' (depth) data
         iterable_dimension_keys = np.array(list(variable_dims))[iterable_dimension_mask]
-
-        # Array providing the indices of the non-lat/lon variable axes
-        # Example: [0 1] indicates that 'time' is contained in the 0th index, 'soil' in the 1st
         iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
-
-        # Array providing the the number of dimensions along each non-lat/lon axis
-        # Example: [12 4] indicates that 'time' has 12 values and 'soil' has 4 values
-        iterable_dimension_iter = np.array(np.shape(variable_array))[iterable_dimension_idxs]
-
-        # Make a list of tuples given the information above. Each tuple represents a unique slice combo through the non-lat/lon axes of the variable's array.
-        # Example: If axis 0 represents month, axis 1 represents depth, '(2, 3)' slices the [month x depth x lat x lon] array at month 2 and depth 3
+        iterable_dimension_iter = np.array(variable_array.shape)[iterable_dimension_idxs]
         indices = dataOPS.generate_indices(list(iterable_dimension_iter))
 
-        # Loop through each tuple (slice combo). Each combo makes a unique map.
         for combo in indices:
-
             key_labels = [str(plotPARAMS.year)]
             variable_array2 = np.copy(variable_array)
             count = 0
-
-            # Loop through each element of the tuple to perform a slice
             for var_dim_key, slice_index, slice_val in zip(iterable_dimension_keys, iterable_dimension_idxs, combo):
-
-                # Slice the array along its 'slice_index'-count axis and 'slice_val' dimension
-                # The '-count' is necessary because the array's dimension shrinks by one dimension with each slice
-                variable_array2 = variable_array2.take(slice_val, axis=slice_index-count)
-
-                # Append the label for file-naming purposes
+                variable_array2 = variable_array2.take(slice_val, axis=slice_index - count)
                 key_labels.append("("+str(slice_val)+")" + dataOPS.keyval2keylabel(var_dim_key, slice_val))
                 count += 1
 
             sub_folder = key_labels[-1].replace(".", "p").replace(" ", "") if len(key_labels) > 2 else None
 
-            # If working with 2d coordinates, transpose to match the lat/lon meshgrid shape
-            if coords_type == '2d' and variable_array2.shape != lon2d.shape: variable_array2 = np.transpose(variable_array2)
+            # Make map and save
+            # lat2d, lon2d, and variable_array2 have dimensions: [n_lats, n_lons]
+            fig, ax = world_map(lat2d, lon2d)
+            overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name,
+                              variable_array2, variable_unit, key_labels,
+                              'inferno', *dataOPS.globalMinMax(variable_array, variable_unit))
+            
+            print('test: ', variable_array2.shape)
+            print('lats: ', lat2d.shape)
+            print('lons: ', lon2d.shape)
 
-            # Make an empty world map
-            fig, ax = world_map(lats, lons)
+            zonal_mean = processJULES.compute_zonal_mean2(variable_array2)
+            areal_mean = processJULES.compute_areal_mean2(variable_array2, lat2d, lon2d)
+            zonal_intg = processJULES.compute_zonal_intg2(variable_array2, lat2d, lon2d)
 
-            # Overlay the sliced variable with contours
-            overplot_variable(ax, lats, lons, variable_name, variable_long_name, variable_array2, variable_unit, key_labels, 'inferno', variable_global_min, variable_global_max)
+            print('zonal_mean: ', zonal_mean)
+            #def compute_zonal_mean(variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
 
-            # Clean up strings
-            translation_table = str.maketrans({char: "" for char in "[]',"})
-            cleaned_text = str(key_labels).translate(translation_table).replace(" ", "_").replace(".", "p")
+            cleaned_text = str(key_labels).translate(str.maketrans({char: "" for char in "[]',"})).replace(" ", "_").replace(".", "p")
+            save_dir = os.path.join(plotPARAMS.outp_path, 'output', variable_name)
+            if sub_folder:
+                save_dir = os.path.join(save_dir, sub_folder)
 
-            # Save plots and files in their end-point folder
-            if sub_folder != None: 
-                plt.savefig(plotPARAMS.outp_path + 'output/' + variable_name + '/' + sub_folder + '/' + variable_name + '_' + cleaned_text + '_map.png', dpi=300,  bbox_inches='tight')
-            else: 
-                plt.savefig(plotPARAMS.outp_path + 'output/' + variable_name + '/' + variable_name + '_' + cleaned_text + '_map.png', dpi=300,  bbox_inches='tight')
-
+            with open(save_dir + '/_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')    
+            with open(save_dir + '/_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')  
+            with open(save_dir + '/_zonalintg_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_intg)) + '\n')
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.png'), dpi=300, bbox_inches='tight')
             plt.close()
 
 
@@ -296,6 +257,7 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     #print('var: ', variable_name)
     levels = np.arange(vmin_r, vmax_r + step/2, step)
 
+    print(lat2d.shape)
     c = ax.contourf(lon2d, lat2d, variable_array,
                     levels=levels, cmap=cmap, transform=ccrs.PlateCarree())
     cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)

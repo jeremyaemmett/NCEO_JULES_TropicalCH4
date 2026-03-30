@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import plotTSERIES
 import plotPARAMS
+import plotMAPS_1D
+import plotZONAL_1D
 import plotZONAL
 import plotMAPS
 import sysOPS
@@ -18,24 +20,23 @@ data_path, outp_path, file_name = plotPARAMS.data_path, plotPARAMS.outp_path, pl
 # Variable(s) and year to map
 variable_names, year = plotPARAMS.variable_names, plotPARAMS.year
 
-print(' ')
-print('Processing output...')
-processJULES.write_processed_files()
+#print(' ')
+#print('Processing output...')
+#processJULES.write_processed_files()
 print(' ')
 print('Making maps...')
-#plotMAPS.make_maps()
+plotMAPS_1D.make_maps()
 print(' ')
 print('Making zonal plots...')
-plotZONAL.make_zonal()
+plotZONAL_1D.make_zonal()
 print(' ')
 print('Making time series...')
 #plotTSERIES.make_tseries()
-#plotMAPS.make_animated_maps()
+plotMAPS.make_animated_maps()
 #plotZONAL.make_animated_zonal()
 #plotTSERIES.make_animated_tseries()
 
 gif_stuff = False
-
 if gif_stuff: 
     gif1 = '/Users/jae35/Documents/nceo/output/t_soil/(3)1p0-2p0m/map_animation.gif'
     gif2 = '/Users/jae35/Documents/nceo/output/t_soil/(3)1p0-2p0m/arealmean_tseries_animation.gif'

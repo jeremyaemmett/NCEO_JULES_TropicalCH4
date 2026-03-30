@@ -24,9 +24,9 @@ if ftype == 4:
     data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105/'
     outp_path = data_path + 'plots/'
     #file_name = 'Umzimvubu_RFMh.Monthly.nc'
-    file_name = 'CRUJRA2.4_2023_n96_v8.0_S3.ilamb.1707.nc'
+    file_name = 'CRUJRA2.4_2023_n96_v8.0_S3.ilamb.1701.nc'
     lat_min, lat_max, lon_min, lon_max = -25.0, 25.0, -20.0, 60.0
-    year = 1707
+    year = 1701
 
 # Variable(s)
 variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'lw_net', 'sw_net', 
