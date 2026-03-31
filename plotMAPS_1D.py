@@ -141,10 +141,11 @@ def make_maps():
             if sub_folder:
                 save_dir = os.path.join(save_dir, sub_folder)
 
+            os.makedirs(save_dir, exist_ok=True)
             with open(save_dir + '/_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')    
             with open(save_dir + '/_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')  
             with open(save_dir + '/_zonalintg_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_intg)) + '\n')
-            os.makedirs(save_dir, exist_ok=True)
+            
             plt.savefig(os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.png'), dpi=300, bbox_inches='tight')
             plt.close()
 
