@@ -1,14 +1,18 @@
 import matplotlib.patheffects as PathEffects
 import cartopy.io.shapereader as shpreader
+import matplotlib.patches as patches
 import cartopy.io.img_tiles as cimgt
+import matplotlib.colors as mcolors
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
+import matplotlib.cm as cm
 import processJULES
 import numpy as np
 import plotPARAMS
 import readJULES
 import rasterio
+import textwrap
 import dataOPS
 import sysOPS
 import os
@@ -124,6 +128,7 @@ def make_maps():
             overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name,
                               variable_array2, variable_unit, key_labels,
                               'inferno', *dataOPS.globalMinMax(variable_array, variable_unit))
+            ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=1, alpha=1.0)
             
             print('test: ', variable_array2.shape)
             print('lats: ', lat2d.shape)
@@ -189,8 +194,10 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     #    print(f"Warning: Could not load DEM for shading: {e}")
 
     # --- Base layers ---
-    ax.add_feature(cfeature.LAND, facecolor='lightgray', zorder=1)
-    ax.add_feature(cfeature.OCEAN, facecolor='white', zorder=1)
+    ax.add_feature(cfeature.LAND, facecolor='#d2b48c', zorder=1, alpha=0.5)
+    #ax.add_feature(cfeature.LAND, facecolor='blue', zorder=1, alpha=0.5)
+    ax.add_feature(cfeature.OCEAN, facecolor='#a6cee3', zorder=1, alpha=0.5)
+    ax.add_feature(cfeature.LAKES, facecolor='#a6cee3', zorder=1, alpha=0.5)
     ax.add_feature(cfeature.RIVERS.with_scale('50m'), edgecolor='blue', linewidth=0.5, zorder=2)
     ax.add_feature(cfeature.BORDERS.with_scale('50m'), linewidth=1.2, zorder=3, edgecolor='gray')
     ax.coastlines(resolution='50m', zorder=4)
@@ -199,8 +206,8 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
     gl.top_labels = False
     gl.right_labels = False
-    gl.xlabel_style = {'fontsize': 16}
-    gl.ylabel_style = {'fontsize': 16}
+    gl.xlabel_style = {'fontsize': 12}
+    gl.ylabel_style = {'fontsize': 12}
 
     # --- Country labels ---
     shpfilename = shpreader.natural_earth(
@@ -218,11 +225,11 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
                 fontstyle='italic',      # keep italic if desired
                 fontfamily='sans-serif', # keep family if needed
                 transform=ccrs.PlateCarree(),
-                ha='center', va='center', color='black'
+                ha='center', va='center', color='black',
             )
             # Add white outline around text
             txt.set_path_effects([
-                PathEffects.withStroke(linewidth=2, foreground='lightgray')
+                PathEffects.withStroke(linewidth=1.5, foreground='lightgray')
             ])
 
     return fig, ax
@@ -259,19 +266,90 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     levels = np.arange(vmin_r, vmax_r + step/2, step)
 
     print(lat2d.shape)
-    c = ax.contourf(lon2d, lat2d, variable_array,
-                    levels=levels, cmap=cmap, transform=ccrs.PlateCarree())
-    cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.8)
-    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=18)
-    cb.ax.tick_params(labelsize=14)
+
+    #c = ax.contourf(lon2d, lat2d, variable_array,
+    #                levels=levels, cmap=cmap, transform=ccrs.PlateCarree(), alpha=0.7)
+    
+    # test test test
+
+    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
+    rgba_cmap = plt.get_cmap(cmap)
+
+    # Create RGBA array from colormap
+    rgba_colors = rgba_cmap(norm(variable_array))
+
+    # Set alpha proportional to value
+    rgba_colors[..., -1] = norm(variable_array)  # 0 = min → 1 = max
+
+    # Plot with pcolormesh: pass RGBA as C, not via color=
+    c = ax.pcolormesh(
+        lon2d, lat2d, rgba_colors,
+        shading='auto',
+        transform=ccrs.PlateCarree()
+    )
+
+    # test test test
+
+    #cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.6)
+
+    #cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=12)
+    #cb.ax.tick_params(labelsize=12)
+
+    # --- Overlay land color behind the colorbar ---
+    # --- 1. Draw a solid land-color base colorbar ---
+    # Assume `cb_ax` is the colorbar axis you’ll use
+    cb_ax = plt.gcf().add_axes([0.80, 0.25, 0.02, 0.50])  # left, bottom, width, height
+
+    # Draw a rectangle with land color in the full colorbar area
+    cb_ax.add_patch(
+        plt.Rectangle(
+            (0, 0), 1, 1,                 # fill full axes
+            transform=cb_ax.transAxes,     # axes coords
+            color='#d2b48c',               # land color
+            zorder=0, alpha = 0.5
+        )
+    )
+
+    # Now create the ScalarMappable with your alpha-aware colormap
+    N = 256
+    colors = rgba_cmap(np.linspace(0, 1, N))
+    colors[:, -1] = np.linspace(0, 1, N)  # alpha ramp
+    alpha_cmap = mcolors.ListedColormap(colors)
+    sm = cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
+    sm.set_array(variable_array)
+
+    # Overlay the actual colorbar on top of the land rectangle
+    cb = plt.colorbar(sm, cax=cb_ax)
+    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=12)
+    cb.ax.tick_params(labelsize=12)
 
     variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1] if len(variable_name.split('_')) > 1 else variable_name
 
     subtitle = ''
     for key in key_labels: subtitle += key + '  '
     
-    ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=18)
-    ax.text(np.min(lon2d)-1, np.min(lat2d)-1, dataOPS.remove_parenthetical_substrings(subtitle), fontsize=18, color='black', ha='left', va='bottom', style='italic')
+    ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=12)
+
+    x0 = np.min(lon2d)
+    y0 = np.min(lat2d) - 1 + 0.75
+    rect_width = 9.0
+    rect_height = 1.5
+
+    # Draw fixed rectangle
+    rect = patches.FancyBboxPatch(
+        (x0, y0), width=rect_width, height=rect_height,
+        boxstyle="round,pad=0.6",
+        facecolor='white', edgecolor='black', alpha=0.80, zorder=10
+    )
+    ax.add_patch(rect)
+
+    # Left-align text inside the box
+    ax.text(
+        x0 + 0.2, y0 + rect_height/2,  # small horizontal padding from left edge
+        dataOPS.remove_parenthetical_substrings(subtitle),
+        ha='left', va='center', fontsize=14,
+        color='black', style='italic', zorder=11
+    )
 
 
 def add_hillshade(ax):

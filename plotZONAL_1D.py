@@ -1,6 +1,7 @@
 from matplotlib.patches import Rectangle
 from matplotlib.patches import Patch
 import matplotlib.patheffects as pe
+import matplotlib.colors as mcolors
 import matplotlib.colors as mcolor
 import cartopy.feature as cfeature
 import matplotlib.lines as mlines
@@ -90,26 +91,76 @@ def make_zonal():
         print(Y)
 
         if is_rate:
-            fig, axs = plt.subplots(2, 2, figsize=(15, 10), gridspec_kw={'width_ratios': [2, 1]})
+            fig, axs = plt.subplots(2, 2, figsize=(11.69, 8.27), gridspec_kw={'width_ratios': [2, 1]})
             ax1, ax2, ax3, ax4 = axs.ravel()  # Or axs.flatten()
         else:
             fig, axs = plt.subplots(1, 2, figsize=(15, 5), gridspec_kw={'width_ratios': [2, 1]})
             ax1, ax2 = axs.ravel()  # Or axs.flatten()
 
         #c = ax1.contourf(X, Y, zonal_values_trimmed, levels=20, cmap='magma')
-        c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto', alpha=0.85)
+        #c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto', alpha=0.85)
+
+        norm = mcolors.Normalize(vmin=np.nanmin(zonal_values_trimmed),
+                                    vmax=np.nanmax(zonal_values_trimmed))
+        rgba_cmap = plt.get_cmap('magma')
+
+        rgba_colors = rgba_cmap(norm(zonal_values_trimmed))
+        rgba_colors[..., -1] = norm(zonal_values_trimmed)  # alpha proportional to value
+
+        #X, Y = np.meshgrid(np.arange(zonal_values_trimmed.shape[1]),
+        #                np.unique(lats))
+
+        c = ax1.pcolormesh(X, Y, rgba_colors, shading='auto')
+        land_color = '#d2b48c'  # your land color
+        alpha = 0.5
+        land_rgba = mcolors.to_rgba(land_color, alpha=alpha)
+        ax1.set_facecolor(land_rgba)
 
         # Get colormap
         num_layers = zonal_values.shape[1]
         cmap = cm.get_cmap('managua', num_layers)
+        cmap = cm.get_cmap('rainbow', num_layers)
 
-        plot_title = "  Zonal and full-region means"
-        ax1.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
+        plot_title = " \n  Zonal and full-region means"
+        ax1.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
         ax1.set_ylabel("Latitude", fontsize=18)
         months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
         #print('shape: ', zonal_values.shape)
         ax1.set_xticks(np.arange(zonal_values.shape[1]))
-        ax1.set_xticklabels(months, fontsize=18)
+        ax1.set_xticklabels(months, fontsize=16)
+
+        ymin = 5 * (lats.min() // 5)
+        ymax = 5 * ((lats.max() + 4) // 5)  # ensures ceiling to next multiple of 5
+        yticks = range(int(ymin), int(ymax)+1, 5)
+        ax1.set_ylim(ymin, ymax)
+        ax1.set_yticks(yticks)
+        ax1.set_yticklabels([f"{y}°" for y in yticks])
+
+        cb_ax = ax1.inset_axes([1.15, 0.1, 0.04, 0.8])  # left, bottom, width, height
+        # Draw a rectangle with land color in the full colorbar area
+        cb_ax.add_patch(
+            plt.Rectangle(
+                (0, 0), 1, 1,                 # fill full axes
+                transform=cb_ax.transAxes,     # axes coords
+                color='#d2b48c',               # land color
+                zorder=0, alpha = 0.5
+            )
+        )
+
+        # Now create the ScalarMappable with your alpha-aware colormap
+        N = 256
+        colors2 = rgba_cmap(np.linspace(0, 1, N))
+        colors2[:, -1] = np.linspace(0, 1, N)  # alpha ramp
+        alpha_cmap = mcolors.ListedColormap(colors2)
+        sm = cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
+        sm.set_array(rgba_colors)
+
+        # Overlay the actual colorbar on top of the land rectangle
+        cb = plt.colorbar(sm, cax=cb_ax)
+        cb.ax.tick_params(labelsize=12)
+
+        ###
+
 
         for i in range(num_layers):
             rect = Rectangle(
@@ -118,7 +169,7 @@ def make_zonal():
                 0.11,               # height of strip
                 transform=ax1.get_xaxis_transform(),  # x=data, y=axes
                 color=cmap(i),
-                alpha=0.6,
+                alpha=0.45,
                 clip_on=False,
                 zorder=0
             )
@@ -133,16 +184,18 @@ def make_zonal():
             #    pe.Normal()])
             label.set_rotation(0)
             label.set_ha('center')  # important for clean alignment
-            label.set_y(-0.03)  # default ~0, negative moves down
+            label.set_y(-0.025)  # default ~0, negative moves down
+            if label.get_text() == 'J':
+                label.set_y(-0.017) 
             label.set_fontname('DejaVu Sans')
             label.set_fontstyle('italic')
 
-        ax1.tick_params(axis='both', which='major', labelsize=20)
+        ax1.tick_params(axis='both', which='major', labelsize=16)
         #ax1.grid(True)
         ax1.spines['top'].set_visible(False)
         ax1.spines['right'].set_visible(False)
-        cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
-        cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
+        #cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
+        cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=16)
         cb.ax.set_title(" ", fontsize=18)  
         cb.ax.tick_params(labelsize=14)
         #for i in range(1, zonal_values.shape[1]):
@@ -151,7 +204,7 @@ def make_zonal():
         #        ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
 
         ax_areal_mean = ax1.twinx()
-        ax_areal_mean.plot(areal_values, linewidth=8.0, color='white')
+        ax_areal_mean.plot(areal_values, linewidth=6.0, color='white')
         ax_areal_mean.plot(areal_values, linewidth=4.0, color='black')
         ax_areal_mean.tick_params(direction='in', labelsize=14)
 
@@ -159,7 +212,7 @@ def make_zonal():
         #ax_areal_mean.step(range(len(areal_values)), areal_values, linewidth=2.0, color='black', where='mid')
 
         plot_title = "  Monthly zonal means"
-        ax2.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
+        ax2.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
         ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit), fontsize=18)
         ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
         ax2.tick_params(axis='both', which='major', labelsize=14)
@@ -172,17 +225,32 @@ def make_zonal():
 
         # Fill between subsequent layers
         for i in range(0, num_layers):
-            ax2.plot(zonal_values[:, i], np.unique(lats), color=cmap(i), label=f"Layer {i}", linewidth=6.0, alpha=0.6)
+            ax2.plot(zonal_values[:, i], np.unique(lats), color=cmap(i), label=f"Layer {i}", linewidth=4.0, alpha=0.45)
 
 
         if is_rate:
 
             integ_values_cumsum = 1e-9 * integ_values_cumsum
 
-            c = ax3.pcolormesh(X, Y, integ_values_cumsum, cmap='magma', shading='auto', alpha=0.85)
+            norm = mcolors.Normalize(vmin=np.nanmin(integ_values_cumsum),
+                                    vmax=np.nanmax(integ_values_cumsum))
+            rgba_cmap = plt.get_cmap('magma')
 
-            plot_title = "  Zonal and full-region cumulative"
-            ax3.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
+            rgba_colors = rgba_cmap(norm(integ_values_cumsum))
+            rgba_colors[..., -1] = norm(integ_values_cumsum)  # alpha proportional to value
+
+            X, Y = np.meshgrid(np.arange(integ_values_cumsum.shape[1]),
+                            np.unique(lats))
+
+            c = ax3.pcolormesh(X, Y, rgba_colors, shading='auto')
+
+            land_color = '#d2b48c'  # your land color
+            alpha = 0.5
+            land_rgba = mcolors.to_rgba(land_color, alpha=alpha)
+            ax3.set_facecolor(land_rgba)
+
+            plot_title = " \n  Zonal and full-region cumulative"
+            ax3.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
             ax3.set_ylabel("Latitude", fontsize=18)
             months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
             # Set ticks first
@@ -197,7 +265,7 @@ def make_zonal():
                     0.11,              # height of strip
                     transform=ax3.get_xaxis_transform(),
                     color=cmap(i),
-                    alpha=0.6,
+                    alpha=0.45,
                     clip_on=False,
                     zorder=0
                 )
@@ -212,17 +280,52 @@ def make_zonal():
                 #    pe.Normal()])
                 label.set_rotation(0)
                 label.set_ha('center')  # important for clean alignment
-                label.set_y(-0.03)  # default ~0, negative moves down
+                label.set_y(-0.025)  # default ~0, negative moves down
+                if label.get_text() == 'J':
+                    label.set_y(-0.017) 
                 label.set_fontname('DejaVu Sans')
                 label.set_fontstyle('italic')
 
-            ax3.tick_params(axis='both', which='major', labelsize=20)
+            ax3.tick_params(axis='both', which='major', labelsize=16)
             #ax1.grid(True)
             ax3.spines['top'].set_visible(False)
             ax3.spines['right'].set_visible(False)
-            cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
+
+            ymin = 5 * (lats.min() // 5)
+            ymax = 5 * ((lats.max() + 4) // 5)  # ensures ceiling to next multiple of 5
+            yticks = range(int(ymin), int(ymax)+1, 5)
+            ax3.set_ylim(ymin, ymax)
+            ax3.set_yticks(yticks)
+            ax3.set_yticklabels([f"{y}°" for y in yticks])
+
+            cb_ax = ax3.inset_axes([1.15, 0.1, 0.04, 0.8])  # left, bottom, width, height
+            # Draw a rectangle with land color in the full colorbar area
+            cb_ax.add_patch(
+                plt.Rectangle(
+                    (0, 0), 1, 1,                 # fill full axes
+                    transform=cb_ax.transAxes,     # axes coords
+                    color='#d2b48c',               # land color
+                    zorder=0, alpha = 0.5
+                )
+            )
+
+            # Now create the ScalarMappable with your alpha-aware colormap
+            N = 256
+            colors2 = rgba_cmap(np.linspace(0, 1, N))
+            colors2[:, -1] = np.linspace(0, 1, N)  # alpha ramp
+            alpha_cmap = mcolors.ListedColormap(colors2)
+            sm = cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
+            sm.set_array(rgba_colors)
+
+            # Overlay the actual colorbar on top of the land rectangle
+            cb = plt.colorbar(sm, cax=cb_ax)
+            cb.ax.tick_params(labelsize=12)
+
+            ###
+
+            #cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
             #cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
-            cb.set_label(dataOPS.cleanup_exponents("kg") + ' / ' + str(lat_spacing) + '\u00B0' + ' lat', fontsize=18)
+            cb.set_label(dataOPS.cleanup_exponents("kg") + ' / ' + str(lat_spacing) + '\u00B0' + ' lat', fontsize=16)
             cb.ax.set_title(" ", fontsize=18)  
             cb.ax.tick_params(labelsize=14)
             cb.ax.yaxis.get_offset_text().set_fontsize(14)
@@ -232,13 +335,13 @@ def make_zonal():
             #        ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
 
             ax_zonal_intg = ax3.twinx()
-            ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=8.0, color='white')
+            ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=6.0, color='white')
             ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=4.0, color='black')
             ax_zonal_intg.tick_params(direction='in', labelsize=14)
             ax_zonal_intg.yaxis.get_offset_text().set_fontsize(14)
 
             plot_title = "  Monthly zonal cumulative"
-            ax4.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
+            ax4.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
             #ax4.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=18)
             ax4.set_xlabel(dataOPS.cleanup_exponents("kg"), fontsize=18)
             ax4.set_ylim([np.nanmin(lats), np.nanmax(lats)])
@@ -253,15 +356,16 @@ def make_zonal():
             # Get colormap
             num_layers = cumulative.shape[1]
             cmap = cm.get_cmap('managua', num_layers)
+            cmap = cm.get_cmap('rainbow', num_layers)
 
             # First fill: from zero to first layer
-            ax4.fill_betweenx(np.unique(lats), 0, cumulative[:, 0], color=cmap(0), label="Layer 0", alpha=0.6)
+            ax4.fill_betweenx(np.unique(lats), 0, cumulative[:, 0], color=cmap(0), label="Layer 0", alpha=0.45)
 
             # Fill between subsequent layers
             for i in range(1, num_layers):
                 lower = cumulative[:, i - 1]
                 upper = cumulative[:, i]
-                ax4.fill_betweenx(np.unique(lats), lower, upper, color=cmap(i), label=f"Layer {i}", alpha=0.6)
+                ax4.fill_betweenx(np.unique(lats), lower, upper, color=cmap(i), label=f"Layer {i}", alpha=0.45)
                 #if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='black', linestyle='-', linewidth = 3.0)
                 #if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='white', linestyle='-', linewidth = 1.0)
                 #if i == 5: ax2.plot(upper, lats, color='gray', linestyle='-', linewidth = 2.0)
@@ -330,12 +434,24 @@ def make_animated_zonal():
 
         for m in range(0, 12):
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.6), gridspec_kw={'width_ratios': [2, 1]})
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5.0), gridspec_kw={'width_ratios': [3, 2]})
 
             ax2.fill_betweenx(lats, 0, cumulative[:, -1], color='gainsboro')
 
+            norm = mcolors.Normalize(vmin=np.nanmin(zonal_values_trimmed),
+                                    vmax=np.nanmax(zonal_values_trimmed))
+            rgba_cmap = plt.get_cmap('magma')
+
+            rgba_colors = rgba_cmap(norm(zonal_values_trimmed))
+            rgba_colors[..., -1] = norm(zonal_values_trimmed)  # alpha proportional to value
+
+            #X, Y = np.meshgrid(np.arange(zonal_values_trimmed.shape[1]),
+            #                np.unique(lats))
+
+            c = ax1.pcolormesh(X, Y, rgba_colors, shading='auto')
+
             #c = ax1.contourf(X, Y, zonal_values_trimmed, levels=20, cmap='magma')
-            c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto')
+            #c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto')
 
             plot_title = "  Zonal mean"
             ax1.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
@@ -347,18 +463,40 @@ def make_animated_zonal():
             #ax1.grid(True)
             ax1.spines['top'].set_visible(False)
             ax1.spines['right'].set_visible(False)
-            cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
-            cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
-            cb.ax.set_title(" ", fontsize=18)  
-            cb.ax.tick_params(labelsize=14)
+
+            cb_ax = ax1.inset_axes([1.15, 0.1, 0.04, 0.8])  # left, bottom, width, height
+            # Draw a rectangle with land color in the full colorbar area
+            cb_ax.add_patch(
+                plt.Rectangle(
+                    (0, 0), 1, 1,                 # fill full axes
+                    transform=cb_ax.transAxes,     # axes coords
+                    color='#d2b48c',               # land color
+                    zorder=0, alpha = 0.5
+                )
+            )
+
+            # Now create the ScalarMappable with your alpha-aware colormap
+            N = 256
+            colors2 = rgba_cmap(np.linspace(0, 1, N))
+            colors2[:, -1] = np.linspace(0, 1, N)  # alpha ramp
+            alpha_cmap = mcolors.ListedColormap(colors2)
+            sm = cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
+            sm.set_array(rgba_colors)
+
+            # Overlay the actual colorbar on top of the land rectangle
+            cb = plt.colorbar(sm, cax=cb_ax)
+            cb.ax.tick_params(labelsize=12)
+
+            ###
+
             ax1.plot([m-0.5, m+0.5, m+0.5, m-0.5, m-0.5], [np.nanmin(lats), np.nanmin(lats), np.nanmax(lats), np.nanmax(lats), np.nanmin(lats)], linestyle='-', color='red', linewidth=6.0)
             for i in range(1, zonal_values.shape[1]):
                 if (i)%3 == 0:
                     ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
                     ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
 
-            plot_title = "  Seasonal cummulative / 5°Lat."
-            ax2.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
+            plot_title = "  Seasonal cumulative / 5°Lat."
+            ax2.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
             ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=18)
             ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
             ax2.tick_params(axis='both', which='major', labelsize=14)
