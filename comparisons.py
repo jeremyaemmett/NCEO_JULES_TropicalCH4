@@ -11,7 +11,10 @@ import pandas as pd
 import numpy as np
 
 base_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_'
-suites = ['u-dk105_8', 'u-dk105_7', 'u-dk105_6', 'u-dk105_5', 'u-dk105_4', 'u-dk105_3', 'u-dk105_2', 'u-dk105_1']
+#suites = ['u-dk105_8', 'u-dk105_7', 'u-dk105_6', 'u-dk105_5', 'u-dk105_4', 'u-dk105_3', 'u-dk105_2', 'u-dk105_1']
+suites_a = ['u-dk105_10', 'u-dk105_7', 'u-dk105_4', 'u-dk105_1']
+suites_b = ['u-dk105_11', 'u-dk105_8', 'u-dk105_5', 'u-dk105_2']
+suites_c = ['u-dk105_12', 'u-dk105_9', 'u-dk105_6', 'u-dk105_3']
 values = [2.7, 2.5, 2.3, 2.1, 2.0, 1.7, 1.5, 1.3]
 variable = 'fch4_wetl'
 
@@ -77,8 +80,9 @@ months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
 #ax_left.set_xticklabels(months)  # do NOT pass fontsize here
 ax_left.set_xticks(np.arange(12))
 ax_left.set_xticklabels(months, fontsize=18)
+ax_left.set_ylabel(r"$10^{-9}\,\mathrm{kg\,m^{-2}\,s^{-1}}$")
 
-cmap = cm.get_cmap('managua', 12)
+cmap = cm.get_cmap('rainbow', 12)
 # Add month-colored rectangles
 for i in range(12):
     rect = Rectangle(
@@ -115,6 +119,7 @@ ax_right.set_title('   Annual areal cummulative', loc='left', fontsize=16, fonts
 ax_right.set_xlabel("$q_{{10}}$", fontsize=18)
 ax_right.set_ylabel("$F_{{CH4}}$", fontsize=18)
 ax_right.grid(True, color='lightgrey', linewidth=3, alpha=0.2)
+ax_right.set_ylabel(r"$\mathrm{kg\,yr^{-1}}$")
 
 ax_left.tick_params(axis='x', labelsize=16)  # x-axis tick labels
 ax_left.tick_params(axis='y', labelsize=16)  # y-axis tick labels

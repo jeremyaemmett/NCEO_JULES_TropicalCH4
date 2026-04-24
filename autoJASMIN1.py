@@ -319,7 +319,7 @@ if task == 'scp':
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/cylc-src/u-ck795/rose-suite.conf')
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw5/jae35/umz2010.nc')
     #scp_from_jasmin('/Users/jae35/Desktop', '/home/users/jae35/eleanor_twin/vary_params.ipynb')
-    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_4', '/work/scratch-pw4/jae35/u-dk105_4/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.1701.nc')
+    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_12_n3', '/work/scratch-pw4/jae35/u-dk105_12_n3/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2022.nc')
 
 if task == 'process':
 

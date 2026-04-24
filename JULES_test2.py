@@ -25,7 +25,7 @@ variable_names, year = plotPARAMS.variable_names, plotPARAMS.year
 #processJULES.write_processed_files()
 print(' ')
 print('Making maps...')
-#plotMAPS_1D.make_maps()
+plotMAPS_1D.make_maps()
 print(' ')
 print('Making zonal plots...')
 plotZONAL_1D.make_zonal()

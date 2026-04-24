@@ -91,7 +91,7 @@ def make_zonal():
         print(Y)
 
         if is_rate:
-            fig, axs = plt.subplots(2, 2, figsize=(11.69, 8.27), gridspec_kw={'width_ratios': [2, 1]})
+            fig, axs = plt.subplots(2, 2, figsize=(10.00, 8.00), gridspec_kw={'width_ratios': [2, 1]})
             ax1, ax2, ax3, ax4 = axs.ravel()  # Or axs.flatten()
         else:
             fig, axs = plt.subplots(1, 2, figsize=(15, 5), gridspec_kw={'width_ratios': [2, 1]})
@@ -120,9 +120,10 @@ def make_zonal():
         num_layers = zonal_values.shape[1]
         cmap = cm.get_cmap('managua', num_layers)
         cmap = cm.get_cmap('rainbow', num_layers)
-
-        plot_title = " \n  Zonal and full-region means"
-        ax1.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
+        #ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=12)
+        plot_title = " \n  Zonal (fill) and full-region (line)\n  means"
+        ax1.set_title(r"$\mathbf{Monthly\ means}$" + "\n" + "zonal (fill) and full-region (line)", loc='left', fontsize=14)
+        #ax1.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
         ax1.set_ylabel("Latitude", fontsize=18)
         months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
         #print('shape: ', zonal_values.shape)
@@ -136,7 +137,7 @@ def make_zonal():
         ax1.set_yticks(yticks)
         ax1.set_yticklabels([f"{y}°" for y in yticks])
 
-        cb_ax = ax1.inset_axes([1.15, 0.1, 0.04, 0.8])  # left, bottom, width, height
+        cb_ax = ax1.inset_axes([1.25, 0.1, 0.04, 0.8])  # left, bottom, width, height
         # Draw a rectangle with land color in the full colorbar area
         cb_ax.add_patch(
             plt.Rectangle(
@@ -184,9 +185,9 @@ def make_zonal():
             #    pe.Normal()])
             label.set_rotation(0)
             label.set_ha('center')  # important for clean alignment
-            label.set_y(-0.025)  # default ~0, negative moves down
+            label.set_y(-0.015)  # default ~0, negative moves down
             if label.get_text() == 'J':
-                label.set_y(-0.017) 
+                label.set_y(-0.004) 
             label.set_fontname('DejaVu Sans')
             label.set_fontstyle('italic')
 
@@ -211,14 +212,17 @@ def make_zonal():
         #ax_areal_mean.step(range(len(areal_values)), areal_values, linewidth=4.0, color='white', where='mid')
         #ax_areal_mean.step(range(len(areal_values)), areal_values, linewidth=2.0, color='black', where='mid')
 
-        plot_title = "  Monthly zonal means"
-        ax2.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
-        ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit), fontsize=18)
+        plot_title = "Sliced means"
+        #ax2.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
+        ax2.set_title(r"$\mathbf{Sliced\ means}$" + "\n" + "by month (color)", loc='left', fontsize=14)
+        ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit), fontsize=16)
         ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
         ax2.tick_params(axis='both', which='major', labelsize=14)
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
         ax2.set_facecolor('silver')
+        ax2.set_yticks(yticks)
+        ax2.set_yticklabels([f"{y}°" for y in yticks])
 
         # cumulative sum along columns
         cumulative = np.cumsum(zonal_values, axis=1)  # shape: (lat, num_curves)
@@ -249,8 +253,9 @@ def make_zonal():
             land_rgba = mcolors.to_rgba(land_color, alpha=alpha)
             ax3.set_facecolor(land_rgba)
 
-            plot_title = " \n  Zonal and full-region cumulative"
-            ax3.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
+            plot_title = " \n  Zonal (fill) and full-region (line)\n  cumulative"
+            #ax3.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
+            ax3.set_title(r"$\mathbf{Monthly\ cumulative}$" + "\n" + "zonal (fill) and full-region (line)", loc='left', fontsize=14)
             ax3.set_ylabel("Latitude", fontsize=18)
             months = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D']
             # Set ticks first
@@ -280,9 +285,9 @@ def make_zonal():
                 #    pe.Normal()])
                 label.set_rotation(0)
                 label.set_ha('center')  # important for clean alignment
-                label.set_y(-0.025)  # default ~0, negative moves down
+                label.set_y(-0.015)  # default ~0, negative moves down
                 if label.get_text() == 'J':
-                    label.set_y(-0.017) 
+                    label.set_y(-0.004) 
                 label.set_fontname('DejaVu Sans')
                 label.set_fontstyle('italic')
 
@@ -298,7 +303,7 @@ def make_zonal():
             ax3.set_yticks(yticks)
             ax3.set_yticklabels([f"{y}°" for y in yticks])
 
-            cb_ax = ax3.inset_axes([1.15, 0.1, 0.04, 0.8])  # left, bottom, width, height
+            cb_ax = ax3.inset_axes([1.25, 0.1, 0.04, 0.8])  # left, bottom, width, height
             # Draw a rectangle with land color in the full colorbar area
             cb_ax.add_patch(
                 plt.Rectangle(
@@ -340,8 +345,9 @@ def make_zonal():
             ax_zonal_intg.tick_params(direction='in', labelsize=14)
             ax_zonal_intg.yaxis.get_offset_text().set_fontsize(14)
 
-            plot_title = "  Monthly zonal cumulative"
-            ax4.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
+            plot_title = "Collapsed cumulative"
+            #ax4.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
+            ax4.set_title(r"$\mathbf{Stacked\ cumulative}$" + "\n" + "by month (color)", loc='left', fontsize=14)
             #ax4.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=18)
             ax4.set_xlabel(dataOPS.cleanup_exponents("kg"), fontsize=18)
             ax4.set_ylim([np.nanmin(lats), np.nanmax(lats)])
@@ -380,7 +386,7 @@ def make_zonal():
         ax2.set_facecolor(colors.to_rgba('gainsboro', alpha=0.5))
 
         # <-- remove y-ticks and labels here
-        ax2.set_yticks([])
+        #ax2.set_yticks([])
 
         # ... same for ax4
         ax4.set_ylim([np.nanmin(lats), np.nanmax(lats)])
@@ -388,8 +394,9 @@ def make_zonal():
         ax4.spines['top'].set_visible(False)
         ax4.spines['right'].set_visible(False)
         ax4.set_facecolor(colors.to_rgba('gainsboro', alpha=0.5))
-        ax4.set_yticks([])
-        ax4.set_ylabel(' \n \n \n')
+        ax4.set_yticks(yticks)
+        ax4.set_yticklabels([f"{y}°" for y in yticks])
+        #ax4.set_ylabel(' \n \n \n')
 
         plt.tight_layout()
         #plt.show()
@@ -453,7 +460,7 @@ def make_animated_zonal():
             #c = ax1.contourf(X, Y, zonal_values_trimmed, levels=20, cmap='magma')
             #c = ax1.pcolormesh(X, Y, zonal_values_trimmed, cmap='magma', shading='auto')
 
-            plot_title = "  Zonal mean"
+            plot_title = "  Zonal means"
             ax1.set_title(plot_title, loc='left', fontsize=18, fontstyle='italic')
             #ax1.set_ylabel("Latitude", fontsize=18)
             months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -464,7 +471,7 @@ def make_animated_zonal():
             ax1.spines['top'].set_visible(False)
             ax1.spines['right'].set_visible(False)
 
-            cb_ax = ax1.inset_axes([1.15, 0.1, 0.04, 0.8])  # left, bottom, width, height
+            cb_ax = ax1.inset_axes([1.20, 0.1, 0.04, 0.8])  # left, bottom, width, height
             # Draw a rectangle with land color in the full colorbar area
             cb_ax.add_patch(
                 plt.Rectangle(
@@ -497,7 +504,7 @@ def make_animated_zonal():
 
             plot_title = "  Seasonal cumulative / 5°Lat."
             ax2.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
-            ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=18)
+            ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=16)
             ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
             ax2.tick_params(axis='both', which='major', labelsize=14)
             ax2.spines['top'].set_visible(False)
