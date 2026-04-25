@@ -21,19 +21,14 @@ all_pos = True
 base_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_'
 variable = 'fch4_wetl'
 
-# Grab unit from original JULES file (just once)
 _, variable_unit, _, _ = readJULES.read_jules_m2(
     plotPARAMS.data_path + plotPARAMS.file_name,
     variable
 )
 
-suites = ['u-dk105_4_n3','u-dk105_3_n3','u-dk105_2_n3']
-values = [4.0, 3.0, 2.0]
+suites = ['u-dk105_11_n3','u-dk105_3_n3','u-dk105_7_n3']
+values = ['Resp.', 'Carb.', 'NPP']
 
-#suites = ['u-dk105_7_n3','u-dk105_3_n3','u-dk105_11_n3']
-#values = ['NPP', 'Carb.', 'Resp.']
-
-months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 months = ['Mar','Jun','Sep','Dec']
 
 
@@ -84,13 +79,21 @@ def setup_map(ax, lats, lons):
 
 
 # =========================
+# ALPHA FUNCTION (KEY FIX)
+# =========================
+def alpha_from_norm(t):
+    # t in [0,1]
+    return 2.0 * np.abs(t - 0.5)
+
+
+# =========================
 # GRID
 # =========================
 lat2d, lon2d = get_latlon_grid(plotPARAMS.data_path + plotPARAMS.file_name)
 
 
 # =========================
-# PRELOAD ALL DATA (for consistent scaling)
+# PRELOAD DATA
 # =========================
 all_data = []
 
@@ -102,7 +105,6 @@ for month in months:
             base_path + suite + '/plots/output/' + variable + '/',
             f'{month}_map.txt'
         )[0]
-        print(path)
         intgs.append(np.loadtxt(path))
 
     intgs = np.stack(intgs)
@@ -116,24 +118,17 @@ for month in months:
 
 all_data = np.concatenate(all_data, axis=0)
 
-vmin = np.nanmin(all_data)
-vmax = np.nanmax(all_data)
+abs_max = np.nanmax(np.abs(all_data))
+vmin = -abs_max
+vmax = abs_max
 
-if mode == "difference":
-    if all_pos:
-        vmax = np.nanmax(np.abs(all_data))
-        vmin = np.nanmin(np.abs(all_data))
-    if not all_pos:
-        vmax = np.nanmax(np.abs(all_data))
-        vmin = -vmax
-
-cmap_name = "inferno" if mode == "absolute" else "Reds"
+cmap_name = "seismic"
 rgba_cmap = plt.get_cmap(cmap_name)
 norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
 
 
 # =========================
-# VIEW: FLAT (GRID)
+# VIEW: FLAT
 # =========================
 if view == "flat":
 
@@ -166,7 +161,7 @@ if view == "flat":
         else:
             data = intgs[:-1] - intgs[1:]
             titles = [
-                f"ΔQ10 = {values[i+1]} → {values[i]}"
+                f"Δ Substrate = {values[i+1]} → {values[i]}"
                 for i in range(len(values)-1)
             ]
 
@@ -175,8 +170,10 @@ if view == "flat":
             ax = axes[i, m]
             setup_map(ax, lat2d, lon2d)
 
-            rgba = rgba_cmap(norm(data[i]))
-            rgba[..., -1] = norm(data[i])  # alpha blending
+            t = norm(data[i])
+
+            rgba = rgba_cmap(t)
+            rgba[..., -1] = alpha_from_norm(t)
 
             ax.pcolormesh(
                 lon2d, lat2d, rgba,
@@ -184,7 +181,6 @@ if view == "flat":
                 transform=ccrs.PlateCarree()
             )
 
-            # month titles
             if i == 0:
                 ax.set_title(month, fontsize=14, fontstyle='italic')
 
@@ -193,7 +189,7 @@ if view == "flat":
 
                 x0 = np.min(lon2d)
                 y0 = np.max(lat2d) - 3 + 0.75
-                rect_width = 20.0
+                rect_width = 33.0
                 rect_height = 2.0
 
                 rect = plt.matplotlib.patches.FancyBboxPatch(
@@ -221,10 +217,12 @@ if view == "flat":
                     zorder=21
                 )
 
-            # ocean ON TOP
-            ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=10, alpha=1.0)
+            ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=10)
 
-    # ===== COLORBAR (alpha-aware) =====
+
+    # =========================
+    # COLORBAR (FIXED ALPHA)
+    # =========================
     cb_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])
 
     cb_ax.add_patch(
@@ -234,10 +232,13 @@ if view == "flat":
     )
 
     N = 256
-    colors = rgba_cmap(np.linspace(0, 1, N))
-    colors[:, -1] = np.linspace(0, 1, N)
+    t = np.linspace(0, 1, N)
+
+    colors = rgba_cmap(t)
+    colors[:, -1] = alpha_from_norm(t)
 
     alpha_cmap = mcolors.ListedColormap(colors)
+
     sm = cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
     sm.set_array([])
 
@@ -249,7 +250,7 @@ if view == "flat":
 
 
 # =========================
-# VIEW: 3D STACKED
+# VIEW: 3D
 # =========================
 elif view == "3d":
 
@@ -279,10 +280,12 @@ elif view == "3d":
             Z = data[i]
             z = m * z_spacing
 
+            t = norm(Z)
+
             ax.plot_surface(
                 lon2d, lat2d,
                 np.full_like(Z, z),
-                facecolors=rgba_cmap(norm(Z)),
+                facecolors=rgba_cmap(t),
                 shade=False
             )
 
@@ -294,7 +297,6 @@ elif view == "3d":
 
     plt.tight_layout()
     plt.show()
-
 
 else:
     raise ValueError("view must be 'flat' or '3d'")

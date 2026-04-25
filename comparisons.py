@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 
 base_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_'
-#suites = ['u-dk105_8', 'u-dk105_7', 'u-dk105_6', 'u-dk105_5', 'u-dk105_4', 'u-dk105_3', 'u-dk105_2', 'u-dk105_1']
+suites = ['u-dk105_8', 'u-dk105_7', 'u-dk105_6', 'u-dk105_5', 'u-dk105_4', 'u-dk105_3', 'u-dk105_2', 'u-dk105_1']
 suites_a = ['u-dk105_10', 'u-dk105_7', 'u-dk105_4', 'u-dk105_1']
 suites_b = ['u-dk105_11', 'u-dk105_8', 'u-dk105_5', 'u-dk105_2']
 suites_c = ['u-dk105_12', 'u-dk105_9', 'u-dk105_6', 'u-dk105_3']
