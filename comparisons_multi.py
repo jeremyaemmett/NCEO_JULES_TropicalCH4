@@ -12,9 +12,9 @@ base_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_'
 variable = 'fch4_wetl'
 
 suite_groups = {
-    "Soil Carbon": ['u-dk105_4_n3', 'u-dk105_3_n3', 'u-dk105_2_n3', 'u-dk105_1_n3'],
+    "Carbon": ['u-dk105_4_n3', 'u-dk105_3_n3', 'u-dk105_2_n3', 'u-dk105_1_n3'],
     "NPP": ['u-dk105_8_n3', 'u-dk105_7_n3', 'u-dk105_6_n3', 'u-dk105_5_n3'],
-    "Soil Resp.": ['u-dk105_12_n3', 'u-dk105_11_n3', 'u-dk105_10_n3', 'u-dk105_9_n3'],
+    "Resp.": ['u-dk105_12_n3', 'u-dk105_11_n3', 'u-dk105_10_n3', 'u-dk105_9_n3'],
 }
 
 q10_map = {
@@ -23,8 +23,8 @@ q10_map = {
     'u-dk105_12_n3': 4.0, 'u-dk105_11_n3': 3.0, 'u-dk105_10_n3': 2.0, 'u-dk105_9_n3': 1.0,
 }
 
-linestyles = {"Soil Carbon": "-", "NPP": "--", "Soil Resp.": ":"}
-markers = {"Soil Carbon": "o", "NPP": "s", "Soil Resp.": "^"}
+linestyles = {"Carbon": "-", "NPP": "--", "Resp.": ":"}
+markers = {"Carbon": "o", "NPP": "s", "Resp.": "^"}
 
 # -------------------------
 # PREP
@@ -44,7 +44,7 @@ q10_to_color = {}
 
 for i, q in enumerate(unique_q10):
     rgba = np.array(cmap(i))
-    rgba[:3] *= 0.7
+    rgba[:3] *= 0.9
     q10_to_color[q] = rgba
 
 # -------------------------
@@ -85,11 +85,11 @@ time = np.arange(len(data_store[0]["areal"]))
 # FIGURE
 # -------------------------
 fig, (ax_left, ax_right) = plt.subplots(
-    1, 2, figsize=(12, 6), gridspec_kw={'width_ratios': [2, 1]}
+    1, 2, figsize=(16, 6), gridspec_kw={'width_ratios': [2, 1]}
 )
 
 for ax in [ax_left, ax_right]:
-    ax.set_facecolor('white')
+    ax.set_facecolor('none')
     ax.yaxis.tick_right()
     ax.yaxis.set_label_position("right")
 
@@ -107,24 +107,25 @@ for q10, series_list in q10_series.items():
         ymin,
         ymax,
         color=q10_to_color[q10],
-        alpha=0.15,
+        alpha=0.50,
         zorder=1
     )
 
     mid = len(time) // 2
     y_mid = (ymin[mid] + ymax[mid]) / 2
 
+    col = 'white' if q10 < 3.0 else 'black'
     ax_left.text(
-        time[mid],
-        y_mid,
+        time[mid] + 1.2*q10 -6.5,
+        1.4*y_mid,
         f"$q_{{10}} = {q10}$",
-        color=q10_to_color[q10],
-        fontsize=14,
+        color=col,
+        fontsize=22,
         ha='center',
         va='center',
         fontstyle='italic',
         zorder=3,
-        path_effects=[pe.withStroke(linewidth=3, foreground='white')]
+        path_effects=[pe.withStroke(linewidth=6, foreground=q10_to_color[q10])]
     )
 
 # -------------------------
@@ -136,7 +137,7 @@ for d in data_store:
         d["areal"],
         color=q10_to_color[d["q10"]],
         linestyle=linestyles[d["group"]],
-        linewidth=3,
+        linewidth=6,
         zorder=2
     )
 
@@ -154,8 +155,8 @@ for group, pts in group_points.items():
         q_vals,
         y_vals,
         linestyle=linestyles[group],
-        color='black',
-        linewidth=2,
+        color='gray',
+        linewidth=6,
         zorder=1
     )
 
@@ -167,7 +168,7 @@ for group, pts in group_points.items():
             marker=markers[group],
             linestyle='',
             color=q10_to_color[q],
-            markersize=8,
+            markersize=15,
             markeredgecolor='black',
             markeredgewidth=0.5,
             zorder=2
@@ -179,15 +180,18 @@ for group, pts in group_points.items():
 ax_left.set_title(
     r"$\mathbf{Monthly\ mean\ } \mathbf{F}_{\mathbf{CH_4}}$" + "\n" + "full-region",
     loc='left',
-    fontsize=14
+    fontsize=26
 )
-ax_left.set_xlabel('\nMonth', fontsize=16)
+#ax_left.set_xlabel('\nMonth', fontsize=18)
 ax_left.set_ylabel(r"$10^{-9}\,\mathrm{kg\,m^{-2}\,s^{-1}}$", fontsize=18)
 ax_left.grid(True, color='lightgrey', linewidth=3, alpha=0.2)
 
 months = ['J','F','M','A','M','J','J','A','S','O','N','D']
 ax_left.set_xticks(np.arange(12))
-ax_left.set_xticklabels(months, fontsize=18)
+ax_left.set_xticklabels(months, fontsize=22)
+
+ax_left.spines['left'].set_visible(False)
+ax_left.spines['top'].set_visible(False)
 
 cmap_month = cm.get_cmap('rainbow', 12)
 # Add month-colored rectangles
@@ -198,11 +202,11 @@ for i in range(12):
         0.09,              # height of strip
         transform=ax_left.get_xaxis_transform(),
         color=cmap_month(i),
-        alpha=0.3,
+        alpha=0.45,
         clip_on=False,
         zorder=0
     )
-    ax_left.add_patch(rect)
+    #ax_left.add_patch(rect)
 
     # Apply colors
     for i, label in enumerate(ax_left.get_xticklabels()):
@@ -222,11 +226,14 @@ for i in range(12):
 ax_right.set_title(
     r"$\mathbf{Annual\ cumulative\ } \mathbf{F}_{\mathbf{CH_4}}$" + "\n" + "full-region",
     loc='left',
-    fontsize=14
+    fontsize=26
 )
-ax_right.set_xlabel("$q_{10}$", fontsize=18)
+ax_right.set_xlabel("$Q_{10}$", fontsize=18)
 ax_right.set_ylabel(r"$\mathrm{kg\,yr^{-1}}$", fontsize=18)
 ax_right.grid(True, color='lightgrey', linewidth=3, alpha=0.2)
+
+ax_right.spines['left'].set_visible(False)
+ax_right.spines['top'].set_visible(False)
 
 # -------------------------
 # LEGEND
@@ -235,11 +242,28 @@ group_handles = [
     Line2D([0], [0], color='black',
            linestyle=linestyles[g],
            marker=markers[g],
-           label=g)
+           label=g, linewidth=6)
     for g in suite_groups
-]
+][::-1]
 
-ax_left.legend(handles=group_handles, title="Substrate", loc='upper center')
+group_handles.insert(1, group_handles.pop(-1))
+
+make_legend = True
+
+if make_legend:
+
+    ax_right.legend(
+        handles=group_handles,
+        title="Substrate",
+        loc='upper left',
+        frameon=False,
+        fontsize=20,
+        markerscale=3.0,
+        handlelength=4.3,
+        title_fontsize=20,
+        handletextpad=0.5,
+        bbox_to_anchor=(0.05, 1.0),
+    )
 
 # -------------------------
 # FINAL
@@ -248,6 +272,7 @@ for ax in [ax_left, ax_right]:
     ax.tick_params(axis='both', labelsize=16)
 
 plt.tight_layout()
+fig.patch.set_alpha(0)  # figure background transparent
 plt.savefig('/Users/jae35/Desktop/JULES_test_data/q10_comparisons.png',
             dpi=300, bbox_inches='tight')
 plt.close()

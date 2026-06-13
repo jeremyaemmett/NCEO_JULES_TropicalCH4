@@ -15,11 +15,11 @@ def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_subst
 
         files = [
             f for f in os.listdir(folder)
-            if f.lower().endswith('.png') and (
-                exclude_substr is None or 
-                not any(sub in f for sub in exclude_substr)
-            )
+            if f.lower().endswith('.png')
+            and not (exclude_substr is not None and any(sub in f for sub in exclude_substr))
+            and '_panel' not in f
         ]
+
         return sorted(files, key=sort_key)
 
     files = get_sorted_pngs(folder, exclude_substr)

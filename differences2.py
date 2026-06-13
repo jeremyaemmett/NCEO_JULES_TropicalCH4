@@ -73,7 +73,7 @@ def setup_map(ax, lats, lons):
     lat_min, lat_max = np.min(lats)-1.5, np.max(lats)+1.5
 
     ax.set_extent([lon_min, lon_max, lat_min, lat_max], ccrs.PlateCarree())
-    ax.add_feature(cfeature.LAND, facecolor='#d2b48c', alpha=0.5)
+    ax.add_feature(cfeature.LAND, facecolor="#f5e6c8", alpha=1)
     ax.add_feature(cfeature.BORDERS, linewidth=0.6)
     ax.coastlines()
 
@@ -168,6 +168,7 @@ if view == "flat":
         for i in range(data.shape[0]):
 
             ax = axes[i, m]
+            ax.set_facecolor("yellow")
             setup_map(ax, lat2d, lon2d)
 
             t = norm(data[i])
@@ -182,7 +183,7 @@ if view == "flat":
             )
 
             if i == 0:
-                ax.set_title(month, fontsize=14, fontstyle='italic')
+                ax.set_title(month, fontsize=26, fontstyle='italic')
 
             # Q10 labels on left
             if m == 0:
@@ -192,30 +193,30 @@ if view == "flat":
                 rect_width = 33.0
                 rect_height = 2.0
 
-                rect = plt.matplotlib.patches.FancyBboxPatch(
-                    (x0, y0),
-                    width=rect_width,
-                    height=rect_height,
-                    boxstyle="round,pad=0.6",
-                    facecolor='white',
-                    edgecolor='black',
-                    alpha=0.8,
-                    zorder=20,
-                    linestyle='dashed'
-                )
-                ax.add_patch(rect)
+                #rect = plt.matplotlib.patches.FancyBboxPatch(
+                #    (x0, y0),
+                #    width=rect_width,
+                #    height=rect_height,
+                #    boxstyle="round,pad=0.6",
+                #    alpha=0.8,
+                #    facecolor='white',
+                #    edgecolor='black',
+                #    zorder=20,
+                #    linestyle='dashed'
+                #)
+                #ax.add_patch(rect)
 
-                ax.text(
-                    x0 + 0.3,
-                    y0 + rect_height / 2,
-                    dataOPS.remove_parenthetical_substrings(titles[i]),
-                    ha='left',
-                    va='center',
-                    fontsize=11,
-                    color='black',
-                    style='italic',
-                    zorder=21
-                )
+                ##    x0 + 0.3,
+                #x.text(
+                #    y0 + rect_height / 2,
+                #    dataOPS.remove_parenthetical_substrings(titles[i]),
+                #    ha='left',
+                #    va='center',
+                #    fontsize=11,
+                #    color='black',
+                #    style='italic',
+                #    zorder=21
+                #)
 
             ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=10)
 
@@ -223,13 +224,15 @@ if view == "flat":
     # =========================
     # COLORBAR (FIXED ALPHA)
     # =========================
-    cb_ax = fig.add_axes([0.92, 0.2, 0.02, 0.6])
+    cb_ax = fig.add_axes([0.91, 0.2, 0.02, 0.6])
 
     cb_ax.add_patch(
         plt.Rectangle((0, 0), 1, 1,
                       transform=cb_ax.transAxes,
-                      color='#d2b48c', alpha=0.5)
+                      color="#f5e6c8", alpha=1)
     )
+
+    #old = "#f5e6c8"
 
     N = 256
     t = np.linspace(0, 1, N)
@@ -243,10 +246,23 @@ if view == "flat":
     sm.set_array([])
 
     cb = plt.colorbar(sm, cax=cb_ax)
-    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=14)
+    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=18)
+    cb.ax.tick_params(labelsize=16)
 
     plt.tight_layout(rect=[0, 0, 0.9, 1])
-    plt.show()
+    #plt.show()
+
+    #for ax in fig.axes:
+    #    ax.patch.set_alpha(0)  # axes background transparent
+
+    fig.patch.set_alpha(0)  # figure background transparent
+
+    plt.savefig(
+        "/Users/jae35/Desktop/JULES_test_data/differences2.png",
+        dpi=300,
+        transparent=True,
+        bbox_inches='tight'
+    )
 
 
 # =========================
@@ -296,7 +312,19 @@ elif view == "3d":
     ax.set_zlabel("Month index")
 
     plt.tight_layout()
-    plt.show()
+    #plt.show()
+
+    fig.patch.set_alpha(0)  # figure background transparent
+
+    for ax in fig.axes:
+        ax.patch.set_alpha(0)  # axes background transparent
+
+    plt.savefig(
+        "/Users/jae35/Desktop/JULES_test_data/differences2.png",
+        dpi=300,
+        transparent=True,
+        bbox_inches='tight'
+    )
 
 else:
     raise ValueError("view must be 'flat' or '3d'")

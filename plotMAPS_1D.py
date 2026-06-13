@@ -18,7 +18,7 @@ import sysOPS
 import os
 
 
-def make_maps():
+def make_maps(stack_longitude_panels=False):
 
     # Clear all .txt files in the output path
     [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(plotPARAMS.outp_path) for f in fn if f.endswith('.txt')]
@@ -125,9 +125,11 @@ def make_maps():
             # Make map and save
             # lat2d, lon2d, and variable_array2 have dimensions: [n_lats, n_lons]
             fig, ax = world_map(lat2d, lon2d)
+            
             overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name,
                               variable_array2, variable_unit, key_labels,
-                              'inferno', *dataOPS.globalMinMax(variable_array, variable_unit))
+                              'inferno', *dataOPS.globalMinMax(variable_array, variable_unit), [0.2, 0.27, 0.25, 0.015])
+            
             ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=1, alpha=1.0)
             
             print('test: ', variable_array2.shape)
@@ -154,10 +156,24 @@ def make_maps():
             # Save 2D map as text file
             map_txt_path = os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.txt')
             np.savetxt(map_txt_path, variable_array2, fmt='%.6e')
-            
+            fig.patch.set_alpha(0)
+
+            map_name = f'{variable_name}_{cleaned_text}_map.png'
+            fname = os.path.basename(map_name)
+            ax.set_title(fname.split(')')[1].split('_map')[0], fontsize=22, fontstyle='italic', loc='left', y=-0.2, x=0.02)
+
             plt.savefig(os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.png'), dpi=300, bbox_inches='tight')
             plt.close()
 
+        make_seasonal_panel_from_txt(
+            save_dir,
+            lat2d,
+            lon2d,
+            variable_name,
+            variable_long_name,
+            variable_unit,
+            *dataOPS.globalMinMax(variable_array, variable_unit)
+        )
 
 def make_animated_maps():
 
@@ -171,7 +187,7 @@ def make_animated_maps():
         map_files = sysOPS.discover_files(unique_end_directory, '_map.png')
         
         #miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/' + unique_end_directory.split('/')[-1] + '_animation.gif', duration=150, smooth=True, exclude_substr='plot_')
-        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans'])
+        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans', '_panel'])
 
 
 def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
@@ -182,10 +198,13 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     lon_min, lon_max = np.min(lons)-1.5, np.max(lons)+1.5
     lat_min, lat_max = np.min(lats)-1.5, np.max(lats)+1.5
 
+    print(lon_min, lon_max)
+
     # Figure and axis
-    fig = plt.figure(figsize=(10, 6))
-    ax = plt.axes(projection=ccrs.PlateCarree())
-    ax.set_extent([lon_min, lon_max, lat_min, lat_max])
+    fig = plt.figure(figsize=(20, 12))
+    ax = plt.axes(projection=ccrs.Mollweide(central_longitude=25))
+    ax.set_extent([-180, 180, -36.0, 36.0], crs=ccrs.PlateCarree())
+    #ax.set_extent([lon_min, lon_max, lat_min, lat_max])
 
     # --- Overlay topographic shading from DEM ---
     #try:
@@ -198,7 +217,7 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     #    print(f"Warning: Could not load DEM for shading: {e}")
 
     # --- Base layers ---
-    ax.add_feature(cfeature.LAND, facecolor='#d2b48c', zorder=1, alpha=0.5)
+    ax.add_feature(cfeature.LAND, facecolor='#f5e6c8', zorder=1, alpha=1)
     #ax.add_feature(cfeature.LAND, facecolor='blue', zorder=1, alpha=0.5)
     ax.add_feature(cfeature.OCEAN, facecolor='#a6cee3', zorder=1, alpha=0.5)
     ax.add_feature(cfeature.LAKES, facecolor='#a6cee3', zorder=1, alpha=0.5)
@@ -208,10 +227,18 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
 
     # --- Gridlines ---
     gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
+
     gl.top_labels = False
     gl.right_labels = False
-    gl.xlabel_style = {'fontsize': 12}
-    gl.ylabel_style = {'fontsize': 12}
+    gl.bottom_labels = True
+    gl.left_labels = True
+
+    gl.xlabel_style = {'fontsize': 10}
+    gl.ylabel_style = {'fontsize': 10}
+
+    gl.xpadding = -10
+    gl.ypadding = -10
+    #gl.left_labels = False
 
     # --- Country labels ---
     shpfilename = shpreader.natural_earth(
@@ -219,27 +246,27 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     )
     reader = shpreader.Reader(shpfilename)
 
-    for record in reader.records():
-        geom = record.geometry
-        centroid = geom.centroid
-        if (lon_min <= centroid.x <= lon_max and lat_min <= centroid.y <= lat_max):
-            txt = ax.text(
-                centroid.x, centroid.y, record.attributes['NAME'],
-                fontsize=country_fontsize, fontweight='bold',
-                fontstyle='italic',      # keep italic if desired
-                fontfamily='sans-serif', # keep family if needed
-                transform=ccrs.PlateCarree(),
-                ha='center', va='center', color='black',
-            )
-            # Add white outline around text
-            txt.set_path_effects([
-                PathEffects.withStroke(linewidth=1.5, foreground='lightgray')
-            ])
+    #for record in reader.records():
+    #    geom = record.geometry
+    #    centroid = geom.centroid
+    #    if (lat_min <= centroid.y <= lat_max):
+    #        txt = ax.text(
+    #            centroid.x, centroid.y, record.attributes['NAME'],
+    #            fontsize=country_fontsize,
+    #            fontstyle='italic',      # keep italic if desired
+    #            fontfamily='sans-serif', # keep family if needed
+    #            transform=ccrs.PlateCarree(),
+    #            ha='center', va='center', color='black',
+    #        )
+    #        # Add white outline around text
+    #        txt.set_path_effects([
+    #            PathEffects.withStroke(linewidth=1.5, foreground='lightgray')
+    #        ])
 
     return fig, ax
 
 
-def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap, variable_global_min, variable_global_max):
+def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap, variable_global_min, variable_global_max, cbar_pos):
 
     """Overplot, onto an empty map, filled contours and a colorbar to display a mapped variable
     Args:
@@ -254,6 +281,8 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     """
 
     vmin, vmax = variable_global_min, variable_global_max
+    if variable_name == 'fch4_wetl':
+        vmin, vmax = 0.0, 0.9
 
     #print('vmin, vmax: ', vmin, vmax)
 
@@ -282,8 +311,11 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     # Create RGBA array from colormap
     rgba_colors = rgba_cmap(norm(variable_array))
 
-    # Set alpha proportional to value
-    rgba_colors[..., -1] = norm(variable_array)  # 0 = min → 1 = max
+    alpha = norm(variable_array)
+    alpha = np.clip(alpha, 0, 1)
+    alpha = np.nan_to_num(alpha, nan=0.0, posinf=1.0, neginf=0.0)
+
+    rgba_colors[..., -1] = alpha
 
     # Plot with pcolormesh: pass RGBA as C, not via color=
     c = ax.pcolormesh(
@@ -302,14 +334,15 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     # --- Overlay land color behind the colorbar ---
     # --- 1. Draw a solid land-color base colorbar ---
     # Assume `cb_ax` is the colorbar axis you’ll use
-    cb_ax = plt.gcf().add_axes([0.80, 0.25, 0.02, 0.50])  # left, bottom, width, height
+    #cb_ax = plt.gcf().add_axes([0.77, 0.25, 0.02, 0.50])  # left, bottom, width, height
+    cb_ax = plt.gcf().add_axes(cbar_pos)
 
     # Draw a rectangle with land color in the full colorbar area
     cb_ax.add_patch(
         plt.Rectangle(
             (0, 0), 1, 1,                 # fill full axes
             transform=cb_ax.transAxes,     # axes coords
-            color='#d2b48c',               # land color
+            color='#f5e6c8',               # land color
             zorder=0, alpha = 0.5
         )
     )
@@ -323,16 +356,18 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     sm.set_array(variable_array)
 
     # Overlay the actual colorbar on top of the land rectangle
-    cb = plt.colorbar(sm, cax=cb_ax)
-    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=12)
-    cb.ax.tick_params(labelsize=12)
+    #cb = plt.colorbar(sm, cax=cb_ax, orientation='horizontal')
+    cb = plt.colorbar(sm, cax=cb_ax, orientation='vertical')
+    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=16)
+    cb.ax.tick_params(labelsize=16)
 
     variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1] if len(variable_name.split('_')) > 1 else variable_name
 
     subtitle = ''
     for key in key_labels: subtitle += key + '  '
     
-    ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=12)
+    #ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=22)
+    #ax.set_title('March', fontsize=22, fontstyle='italic')
 
     x0 = np.min(lon2d)
     y0 = np.min(lat2d) - 1 + 0.75
@@ -340,22 +375,164 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     rect_height = 1.5
 
     # Draw fixed rectangle
-    rect = patches.FancyBboxPatch(
-        (x0, y0), width=rect_width, height=rect_height,
-        boxstyle="round,pad=0.6",
-        facecolor='white', edgecolor='black', alpha=0.80, zorder=10
-    )
-    ax.add_patch(rect)
+    #rect = patches.FancyBboxPatch(
+    #    (x0, y0), width=rect_width, height=rect_height,
+    #    boxstyle="round,pad=0.6",
+    #    facecolor='white', edgecolor='black', alpha=0.80, zorder=10
+    #)
+    #ax.add_patch(rect)
 
     # Left-align text inside the box
-    ax.text(
-        x0 + 0.2, y0 + rect_height/2,  # small horizontal padding from left edge
-        dataOPS.remove_parenthetical_substrings(subtitle),
-        ha='left', va='center', fontsize=14,
-        color='black', style='italic', zorder=11
-    )
+    #ax.text(    #    x0 + 0.2, y0 + rect_height/2,  # small horizontal padding from left edge
+    #    dataOPS.remove_parenthetical_substrings(subtitle),
+    #    ha='left', va='center', fontsize=14,
+    #    color='black', style='italic', zorder=11
+    #)
 
 
 def add_hillshade(ax):
     tiler = cimgt.Stamen('terrain-background')  # or 'terrain'
     ax.add_image(tiler, 6, zorder=0)  # 6 is zoom level, adjust for resolution
+
+
+def make_seasonal_panel_from_txt(
+        save_dir,
+        lat2d,
+        lon2d,
+        variable_name,
+        variable_long_name,
+        variable_unit,
+        variable_global_min,
+        variable_global_max):
+    
+    lon_min, lon_max = 20, 39
+    lat_min, lat_max = -2, 17
+
+    months = ['Mar', 'Jun', 'Sep', 'Dec']
+
+    files = {}
+
+    for fname in os.listdir(save_dir):
+
+        if not fname.endswith('_map.txt'):
+            continue
+
+        for month in months:
+            if month in fname:
+                files[month] = os.path.join(save_dir, fname)
+
+    missing = [m for m in months if m not in files]
+
+    if missing:
+        print(f"Skipping {save_dir}, missing {missing}")
+        return
+
+    fig = plt.figure(figsize=(15, 11)) # 24, 11
+
+    positions = {
+        'Mar': 1,
+        'Jun': 2,
+        'Sep': 3,
+        'Dec': 4
+    }
+
+    for month in months:
+
+        ax = fig.add_subplot(
+            2,
+            2,
+            positions[month],
+            projection=ccrs.Mollweide(central_longitude=25)
+        )
+
+        # replicate world_map styling
+        ax.set_extent([-180, 180, -36, 36],
+                      crs=ccrs.PlateCarree())
+
+        ax.add_feature(
+            cfeature.LAND,
+            facecolor='#f5e6c8',
+            zorder=1,
+            alpha=1
+        )
+
+        ax.add_feature(
+            cfeature.OCEAN,
+            facecolor='#a6cee3',
+            zorder=1,
+            alpha=0.5
+        )
+
+        ax.add_feature(
+            cfeature.LAKES,
+            facecolor='#a6cee3',
+            zorder=1,
+            alpha=0.5
+        )
+
+        ax.add_feature(
+            cfeature.RIVERS.with_scale('50m'),
+            edgecolor='blue',
+            linewidth=0.5,
+            zorder=2
+        )
+
+        ax.add_feature(
+            cfeature.BORDERS.with_scale('50m'),
+            linewidth=1.2,
+            zorder=3,
+            edgecolor='gray'
+        )
+
+        ax.coastlines(resolution='50m', zorder=4)
+
+        data = np.loadtxt(files[month])
+
+        overplot_variable(
+            ax,
+            lat2d,
+            lon2d,
+            variable_name,
+            variable_long_name,
+            data,
+            variable_unit,
+            [month],
+            'inferno',
+            variable_global_min,
+            variable_global_max,
+            [0.47, 0.33, 0.02, 0.33]
+        )
+
+        ax.add_feature(
+            cfeature.OCEAN,
+            facecolor="#bcd9e9",
+            zorder=4,
+            alpha=1.0
+        )
+
+        # left, bottom, width, height [0.375, 0.51, 0.25, 0.015]
+
+        ax.set_title(
+            month,
+            fontsize=22,
+            fontstyle='italic'
+        )
+
+        ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
+
+    plt.tight_layout()
+
+    outfile = os.path.join(
+        save_dir,
+        f'{variable_name}_seasonal_panel.png'
+    )
+
+    plt.savefig(
+        outfile,
+        dpi=300,
+        bbox_inches='tight'
+    )
+
+    plt.close()
+
+    print('Saved:', outfile)

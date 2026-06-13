@@ -218,7 +218,7 @@ def check_error_file():
 def scp_from_jasmin(local_directory, remote_directory_and_files):
 
     cmd = (
-        "scp -v -o ProxyJump=jae35@login.jasmin.ac.uk "
+        "scp -r -v -o ProxyJump=jae35@login.jasmin.ac.uk "
         f"jae35@cylc2.jasmin.ac.uk:'{remote_directory_and_files}' "
         f"{shlex.quote(local_directory)}"
     )
@@ -301,7 +301,7 @@ def daily_to_monthly2(input_file, output_file):
 
     print(f"Monthly averages saved to {output_file}")
 
-task = 'scp'
+task = 'ssh'
 
 if task == 'ssh':
 
@@ -319,7 +319,10 @@ if task == 'scp':
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/home/users/jae35/cylc-src/u-ck795/rose-suite.conf')
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output', '/work/scratch-pw5/jae35/umz2010.nc')
     #scp_from_jasmin('/Users/jae35/Desktop', '/home/users/jae35/eleanor_twin/vary_params.ipynb')
-    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_12_n3', '/work/scratch-pw4/jae35/u-dk105_12_n3/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2022.nc')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_12_n3', '/work/scratch-pw4/jae35/u-dk105_12_n3/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2022.nc')
+    #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/suite_copies', '/home/users/jae35/hold/u-dk*n3')
+    scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_3_n7', '/work/scratch-pw4/jae35/u-dk105_3_n7/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2022.nc')
+    #scp_from_jasmin('/Users/jae35/Desktop', '/gws/ssde/j25a/jules/eleanorburke/TRENDY/jules_ancils/qrparm.soil.dust.merge-plus-soil_kaolinitic_oxisols_ultisols_dominant_vn2.nc')
 
 if task == 'process':
 

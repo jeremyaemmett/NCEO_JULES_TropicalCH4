@@ -22,12 +22,12 @@ if ftype == 3:
     year = 2010
 if ftype == 4:
     data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_8/'
-    data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_12_n3/'
+    data_path = '/Users/jae35/Desktop/JULES_test_data/JASMIN_output_u-dk105_3_n6/'
     outp_path = data_path + 'plots/'
     #file_name = 'Umzimvubu_RFMh.Monthly.nc'
     file_name = 'CRUJRA2.4_2023_n96_v8.0_S3.ilamb.1701.nc'
     file_name = 'CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2022.nc'
-    lat_min, lat_max, lon_min, lon_max = -25.0, 25.0, -20.0, 60.0
+    lat_min, lat_max, lon_min, lon_max = -36.0, 36.0, 0.0, -50.0
     year = 1701
     year = 2022
 
@@ -39,4 +39,5 @@ variable_names = ['t_soil', 'fch4_wetl', 'tstar_gb', 'frac', 'lai', 'lai_gb', 'l
                   'b', 'fexp', 'hcap', 'hcon', 'satcon', 'sathh', 'sm_crit', 'sm_sat', 'sm_wilt',
                   'ti_mean', 'ti_sig']
 
-variable_names = ['fch4_wetl', 't_soil']
+variable_names = ['fch4_wetl']
+#variable_names = ['fch4_wetl', 't_soil', 'npp_gb', 'resp_p_gb']
