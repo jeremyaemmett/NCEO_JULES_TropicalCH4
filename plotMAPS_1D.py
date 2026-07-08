@@ -201,9 +201,10 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     print(lon_min, lon_max)
 
     # Figure and axis
-    fig = plt.figure(figsize=(20, 12))
+    fig = plt.figure(figsize=(40, 50))
     ax = plt.axes(projection=ccrs.Mollweide(central_longitude=25))
-    ax.set_extent([-180, 180, -36.0, 36.0], crs=ccrs.PlateCarree())
+    #ax.set_extent([-180, 180, -90.0, 90.0], crs=ccrs.PlateCarree())
+    ax.set_global()
     #ax.set_extent([lon_min, lon_max, lat_min, lat_max])
 
     # --- Overlay topographic shading from DEM ---
@@ -356,8 +357,8 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     sm.set_array(variable_array)
 
     # Overlay the actual colorbar on top of the land rectangle
-    #cb = plt.colorbar(sm, cax=cb_ax, orientation='horizontal')
-    cb = plt.colorbar(sm, cax=cb_ax, orientation='vertical')
+    cb = plt.colorbar(sm, cax=cb_ax, orientation='horizontal')
+    #cb = plt.colorbar(sm, cax=cb_ax, orientation='vertical')
     cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=16)
     cb.ax.tick_params(labelsize=16)
 
@@ -427,7 +428,7 @@ def make_seasonal_panel_from_txt(
         print(f"Skipping {save_dir}, missing {missing}")
         return
 
-    fig = plt.figure(figsize=(15, 11)) # 24, 11
+    fig = plt.figure(figsize=(15, 10)) # 24, 11
 
     positions = {
         'Mar': 1,
@@ -446,7 +447,7 @@ def make_seasonal_panel_from_txt(
         )
 
         # replicate world_map styling
-        ax.set_extent([-180, 180, -36, 36],
+        ax.set_extent([-180, 180, -90, 90],
                       crs=ccrs.PlateCarree())
 
         ax.add_feature(

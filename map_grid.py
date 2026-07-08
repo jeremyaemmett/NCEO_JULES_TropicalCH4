@@ -2,7 +2,7 @@ import xarray as xr
 import pandas as pd
 import numpy as np
 import subprocess
-import readJULES
+#import readJULES
 import shlex
 import glob
 import time
@@ -103,8 +103,8 @@ if task == 'map':
     file_path_1 = '/Users/jae35/Desktop/JULES_test_data/assorted_files/example_init.selpts.nc'
     file_path_2 = '/Users/jae35/Desktop/JULES_test_data/assorted_files/JULES-ES.vn7.6_CRUJRA2.4.spinup_01_P00.dump.17000101.0.nc.selpts.nc'
 
-    file_path_1 = '/Users/jae35/Desktop/qrparm.soil_n96.nc'
-    file_path_2 = '/Users/jae35/Desktop/qrparm.soil.dust.merge-plus-soil_kaolinitic_oxisols_ultisols_dominant_vn2.nc'
+    #file_path_1 = '/Users/jae35/Desktop/qrparm.soil_n96.nc'
+    #file_path_2 = '/Users/jae35/Desktop/qrparm.soil.dust.merge-plus-soil_kaolinitic_oxisols_ultisols_dominant_vn2.nc'
 
     nc0 = Dataset(file_path_0)
     latitude_0 = nc0.variables["latitude"][:]

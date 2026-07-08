@@ -214,6 +214,7 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     # Figure and axis
     fig = plt.figure(figsize=(10, 6))
     ax = plt.axes(projection=ccrs.PlateCarree())
+
     ax.set_extent([lon_min, lon_max, lat_min, lat_max])
 
     # --- Overlay topographic shading from DEM ---
