@@ -18,18 +18,18 @@ import sysOPS
 import os
 
 
-def make_maps(stack_longitude_panels=False):
+def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False):
 
     # Clear all .txt files in the output path
-    [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(plotPARAMS.outp_path) for f in fn if f.endswith('.txt')]
+    [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(outp_path) for f in fn if f.endswith('.txt')]
 
     # Full 'time' array
-    times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'time')
+    times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
     times = dataOPS.ensure_np_datetime(times)
     # Get the time dimension indices that fall within the desired year
-    year_indices = np.where((times >= np.datetime64(f'{plotPARAMS.year}-01-01')) & (times < np.datetime64(f'{plotPARAMS.year + 1}-01-01')))[0]
+    year_indices = np.where((times >= np.datetime64(f'{year}-01-01')) & (times < np.datetime64(f'{year + 1}-01-01')))[0]
 
-    header = readJULES.read_jules_header(plotPARAMS.data_path + plotPARAMS.file_name)
+    header = readJULES.read_jules_header(data_path + file_name)
     dimension_keys, variable_keys = list(header[0]), list(header[1])
 
     if 'latitude' in variable_keys and 'longitude' in variable_keys: lat_string, lon_string = 'latitude', 'longitude'
@@ -39,8 +39,8 @@ def make_maps(stack_longitude_panels=False):
     if 'y' in dimension_keys and 'x' in dimension_keys: lat_key, lon_key = 'y', 'x'
 
     # Latitudes and Longitudes, their full arrays
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, lat_string)
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, lon_string)
     
     # Flatten 1D arrays and infer grid
     lats_flat = lats.flatten()
@@ -57,18 +57,17 @@ def make_maps(stack_longitude_panels=False):
     lon_idx = ((lons_flat - lon_grid[0]) / dlon).round().astype(int)
     lat2d, lon2d = np.meshgrid(lat_grid, lon_grid, indexing='ij')
 
-    print('Lats: ', lats)
-    print('Lons: ', lons)
-    print('Coords are serialized with inferred lat/lon resolution: ', dlat, dlon)
+    #print('Lats: ', lats)
+    #print('Lons: ', lons)
+    #print('Coords are serialized with inferred lat/lon resolution: ', dlat, dlon)
 
-    print(' ')
     # Loop through variables
     for variable_name in plotPARAMS.variable_names:
         print('Processing variable:', variable_name)
 
         # 1. Read variable
         variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(
-            plotPARAMS.data_path + plotPARAMS.file_name, variable_name
+            data_path + file_name, variable_name
         )
 
         # 2. Sanitize extreme values
@@ -112,7 +111,7 @@ def make_maps(stack_longitude_panels=False):
         indices = dataOPS.generate_indices(list(iterable_dimension_iter))
 
         for combo in indices:
-            key_labels = [str(plotPARAMS.year)]
+            key_labels = [str(year)]
             variable_array2 = np.copy(variable_array)
             count = 0
             for var_dim_key, slice_index, slice_val in zip(iterable_dimension_keys, iterable_dimension_idxs, combo):
@@ -132,19 +131,19 @@ def make_maps(stack_longitude_panels=False):
             
             ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=1, alpha=1.0)
             
-            print('test: ', variable_array2.shape)
-            print('lats: ', lat2d.shape)
-            print('lons: ', lon2d.shape)
+            #print('test: ', variable_array2.shape)
+            #print('lats: ', lat2d.shape)
+            #print('lons: ', lon2d.shape)
 
             zonal_mean = processJULES.compute_zonal_mean2(variable_array2)
             areal_mean = processJULES.compute_areal_mean2(variable_array2, lat2d, lon2d)
             zonal_intg = processJULES.compute_zonal_intg2(variable_array2, lat2d, lon2d)
 
-            print('zonal_mean: ', zonal_mean)
+            #print('zonal_mean: ', zonal_mean)
             #def compute_zonal_mean(variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
 
             cleaned_text = str(key_labels).translate(str.maketrans({char: "" for char in "[]',"})).replace(" ", "_").replace(".", "p")
-            save_dir = os.path.join(plotPARAMS.outp_path, 'output', variable_name)
+            save_dir = os.path.join(outp_path, 'output', variable_name)
             if sub_folder:
                 save_dir = os.path.join(save_dir, sub_folder)
 
@@ -175,10 +174,10 @@ def make_maps(stack_longitude_panels=False):
             *dataOPS.globalMinMax(variable_array, variable_unit)
         )
 
-def make_animated_maps():
+def make_animated_maps(data_path, outp_path, file_name, year):
 
     # Make a list of every t-series file across all of the input variables
-    files = sysOPS.discover_files(plotPARAMS.outp_path, '_map.png')
+    files = sysOPS.discover_files(outp_path, '_map.png')
 
     unique_end_directories = sysOPS.get_unique_end_directories(files)
 
@@ -187,7 +186,7 @@ def make_animated_maps():
         map_files = sysOPS.discover_files(unique_end_directory, '_map.png')
         
         #miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/' + unique_end_directory.split('/')[-1] + '_animation.gif', duration=150, smooth=True, exclude_substr='plot_')
-        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans', '_panel'])
+        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans'])
 
 
 def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
@@ -198,7 +197,7 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     lon_min, lon_max = np.min(lons)-1.5, np.max(lons)+1.5
     lat_min, lat_max = np.min(lats)-1.5, np.max(lats)+1.5
 
-    print(lon_min, lon_max)
+    #print('Lon min, max: ', lon_min, lon_max)
 
     # Figure and axis
     fig = plt.figure(figsize=(40, 50))
@@ -299,7 +298,7 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     #print('var: ', variable_name)
     levels = np.arange(vmin_r, vmax_r + step/2, step)
 
-    print(lat2d.shape)
+    #print(lat2d.shape)
 
     #c = ax.contourf(lon2d, lat2d, variable_array,
     #                levels=levels, cmap=cmap, transform=ccrs.PlateCarree(), alpha=0.7)

@@ -23,7 +23,7 @@ def pngs_to_gif(folder, out='out.gif', duration=600, smooth=False, exclude_subst
         return sorted(files, key=sort_key)
 
     files = get_sorted_pngs(folder, exclude_substr)
-    print('sorted files: ', files)
+    #print('sorted files: ', files)
 
     if not files:
         raise ValueError("No PNG files found in folder.")

@@ -20,13 +20,13 @@ import sysOPS
 import os
 
 
-def make_zonal():
+def make_zonal(data_path, outp_path, file_name, year):
 
-    files = sysOPS.discover_files(plotPARAMS.outp_path, '_zonalmean_tseries.txt')
+    files = sysOPS.discover_files(outp_path, '_zonalmean_tseries.txt')
     
     unique_end_directories = sysOPS.get_unique_end_directories(files)
 
-    header = readJULES.read_jules_header(plotPARAMS.data_path + plotPARAMS.file_name)
+    header = readJULES.read_jules_header(data_path + file_name)
     dimension_keys, variable_keys = list(header[0]), list(header[1])
 
     if 'latitude' in variable_keys and 'longitude' in variable_keys: lat_string, lon_string = 'latitude', 'longitude'
@@ -36,8 +36,8 @@ def make_zonal():
     if 'y' in dimension_keys and 'x' in dimension_keys: lat_key, lon_key = 'y', 'x'
 
     # Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lat_string)
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, lon_string)
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, lat_string)
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, lon_string)
 
     #coords_are_2d = len(np.shape(lats)) == 2
     #if coords_are_2d: lats, lons = lats[:, 0], lons[0, :]
@@ -60,7 +60,7 @@ def make_zonal():
         except ValueError:
             key = os.path.basename(os.path.dirname(zonal_file))
 
-        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, key)
+        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, key)
 
         #print('k_unit: ', k_unit, ' ', dataOPS.check_if_rate(k_unit))
 
@@ -84,11 +84,11 @@ def make_zonal():
             raise ValueError(f"Unexpected shape: {integ_values.shape}")
 
         # Assuming lats is your latitude array with length 100
-        print(lats)
-        print(np.unique(lats))
+        #print(lats)
+        #print(np.unique(lats))
         X, Y = np.meshgrid(np.arange(12), np.unique(lats))  # shape (100, 12)
-        print(X)
-        print(Y)
+        #print(X)
+        #print(Y)
 
         if is_rate:
             fig, axs = plt.subplots(2, 2, figsize=(17.50, 9.00), gridspec_kw={'width_ratios': [2, 1]})
@@ -411,13 +411,13 @@ def make_zonal():
 
 def make_animated_zonal():
 
-    files = sysOPS.discover_files(plotPARAMS.outp_path, '_zonalmean_tseries.txt')
+    files = sysOPS.discover_files(outp_path, '_zonalmean_tseries.txt')
     
     unique_end_directories = sysOPS.get_unique_end_directories(files)
 
     # Latitudes and Longitudes, their full arrays, converted to 2D meshgrids
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lat')
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, 'lon')
+    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, 'lat')
+    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, 'lon')
 
     for unique_end_directory in unique_end_directories:
 
@@ -432,7 +432,7 @@ def make_animated_zonal():
         except ValueError:
             key = os.path.basename(os.path.dirname(zonal_file))
 
-        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(plotPARAMS.data_path + plotPARAMS.file_name, key)
+        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, key)
 
         zonal_values = np.loadtxt(zonal_file).T  # shape (100, 12)
         zonal_values_trimmed = np.copy(zonal_values)

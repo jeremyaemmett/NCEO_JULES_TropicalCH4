@@ -20,4 +20,4 @@ def push2GitHub2(message):
     os.system(f'git commit -m "{message}"')
     os.system("git push -u origin main")
 
-push2GitHub2('made time series overlap the zonal plots, made average row, made cumulative row')
+push2GitHub2('automatic looping of postprocessing scripts')
