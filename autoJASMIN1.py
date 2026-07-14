@@ -215,6 +215,24 @@ def check_error_file():
     subprocess.run(["osascript", "-e", apple_script])
 
 
+def scp_from_alice(local_directory, remote_directory_and_files):
+
+    cmd = (
+        "scp -r -v "
+        f"alice:'{remote_directory_and_files}' "
+        f"{shlex.quote(local_directory)}"
+    )
+
+    print(f"\n🔧 Running command:\n{cmd}\n")
+
+    result = subprocess.run(cmd, shell=True)
+
+    if result.returncode == 0:
+        print("\nFiles copied successfully\n")
+    else:
+        print(f"\nscp failed with exit code {result.returncode}\n")
+
+
 def scp_from_jasmin(local_directory, remote_directory_and_files):
 
     cmd = (
@@ -343,11 +361,13 @@ if task == 'scp':
     #scp_from_jasmin('/Users/jae35/Desktop', '/gws/ssde/j25a/jules/eleanorburke/TRENDY/jules_ancils/qrparm.soil.dust.merge-plus-soil_kaolinitic_oxisols_ultisols_dominant_vn2.nc')
     #scp_from_jasmin('/Users/jae35/Desktop/racc_stuff', '/home/users/wt164277/saber_exps/figure_eastward_wind.png')
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/sp1/JASMIN_output_u-dk105_4_sp1', '/work/scratch-pw5/jae35/u-dk105_4_sp1/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc')
-    for i in range(1, 12 + 1):
-        scp_from_jasmin(
-            f'/Users/jae35/Desktop/JULES_test_data/sp2/JASMIN_output_u-dk105_{i}_sp2',
-            f'/work/scratch-pw5/jae35/u-dk105_{i}_sp2/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc'
-        )
+    # for i in range(1, 12 + 1):
+    #     scp_from_jasmin(
+    #         f'/Users/jae35/Desktop/JULES_test_data/sp2/JASMIN_output_u-dk105_{i}_sp2',
+    #         f'/work/scratch-pw5/jae35/u-dk105_{i}_sp2/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc'
+    #     )
+    #scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/notebooks/diagnostics/african_wetland_ch4_budget.ipynb')
+    scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/jules_data/u-dc921/GSWP3-W5E5_OBSCLIM')
 
 if task == 'process':
 
