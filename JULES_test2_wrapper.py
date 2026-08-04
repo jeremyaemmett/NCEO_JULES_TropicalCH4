@@ -15,7 +15,7 @@ def natural_key(s):
 
 root_path = '/Users/jae35/Desktop/JULES_test_data/'
 
-folder = 'sp1'
+folder = 'test'
 
 folder_path = os.path.join(root_path, folder)
 

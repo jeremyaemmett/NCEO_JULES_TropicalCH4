@@ -132,7 +132,8 @@ def make_zonal(data_path, outp_path, file_name, year):
 
         ymin = 5 * (lats.min() // 5)
         ymax = 5 * ((lats.max() + 4) // 5)  # ensures ceiling to next multiple of 5
-        yticks = range(int(ymin), int(ymax)+1, 10)
+        #yticks = range(int(ymin), int(ymax)+1, 10)
+        yticks = np.arange(-90, 91, 30)   # or -90 to 91 if global
         ax1.set_ylim(ymin, ymax)
         ax1.set_yticks(yticks)
         ax1.set_yticklabels([f"{y}°" for y in yticks], fontsize=24)
@@ -196,7 +197,7 @@ def make_zonal(data_path, outp_path, file_name, year):
         ax1.spines['top'].set_visible(False)
         ax1.spines['right'].set_visible(False)
         #cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
-        cb.set_label(' \n' + dataOPS.cleanup_exponents(k_unit) + '\n', fontsize=26)
+        cb.set_label(' \n' + dataOPS.cleanup_exponents(k_unit) + '\n', fontsize=22)
         cb.ax.set_title(" ", fontsize=22)  
         cb.ax.tick_params(labelsize=22)
         #for i in range(1, zonal_values.shape[1]):
@@ -221,7 +222,7 @@ def make_zonal(data_path, outp_path, file_name, year):
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
         ax2.set_facecolor('none')
-        ax2.patch.set_alpha(0)
+        #ax2.patch.set_alpha(0) # transparent background
         ax2.set_yticks(yticks)
         ax2.set_yticklabels([f"{y}°" for y in yticks])
 
@@ -299,7 +300,8 @@ def make_zonal(data_path, outp_path, file_name, year):
 
             ymin = 5 * (lats.min() // 5)
             ymax = 5 * ((lats.max() + 4) // 5)  # ensures ceiling to next multiple of 5
-            yticks = range(int(ymin), int(ymax)+1, 10)
+            #yticks = range(int(ymin), int(ymax)+1, 10)
+            yticks = np.arange(-90, 91, 30)   # or -90 to 91 if global
             ax3.set_ylim(ymin, ymax)
             ax3.set_yticks(yticks)
             ax3.set_yticklabels([f"{y}°" for y in yticks])
@@ -331,7 +333,7 @@ def make_zonal(data_path, outp_path, file_name, year):
 
             #cb = plt.colorbar(c, orientation='vertical', pad=0.1, shrink=0.8, fraction=0.05)
             #cb.set_label(dataOPS.cleanup_exponents(k_unit), fontsize=18)
-            cb.set_label(dataOPS.cleanup_exponents("\n kg") + ' / ' + str(lat_spacing) + '\u00B0' + ' lat', fontsize=26)
+            cb.set_label(dataOPS.cleanup_exponents("\n kg") + ' / ' + str(lat_spacing) + '\u00B0' + ' lat', fontsize=22)
             cb.ax.set_title(" ", fontsize=22)  
             cb.ax.tick_params(labelsize=22)
             cb.ax.yaxis.get_offset_text().set_fontsize(14)
@@ -356,7 +358,7 @@ def make_zonal(data_path, outp_path, file_name, year):
             ax4.spines['top'].set_visible(False)
             ax4.spines['right'].set_visible(False)
             ax4.set_facecolor('none')
-            ax4.patch.set_alpha(0)
+            #ax4.patch.set_alpha(0)
 
             # cumulative sum along columns
             cumulative = 1e-9 * np.cumsum(integ_values, axis=1)  # shape: (lat, num_curves)
@@ -403,7 +405,7 @@ def make_zonal(data_path, outp_path, file_name, year):
         plt.tight_layout()
         #plt.show()
 
-        fig.patch.set_alpha(0)  # figure background transparent
+        #fig.patch.set_alpha(0)  # figure background transparent
 
         plt.savefig(unique_end_directory + '/' + 'complete_zonalmeans.png', dpi=300, bbox_inches='tight')
         plt.close()

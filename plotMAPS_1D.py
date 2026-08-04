@@ -127,7 +127,7 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
             
             overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name,
                               variable_array2, variable_unit, key_labels,
-                              'inferno', *dataOPS.globalMinMax(variable_array, variable_unit), [0.2, 0.27, 0.25, 0.015])
+                              'inferno', *dataOPS.globalMinMax(variable_array, variable_unit), [0.40, 0.05, 0.20, 0.025])
             
             ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=1, alpha=1.0)
             
@@ -155,11 +155,11 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
             # Save 2D map as text file
             map_txt_path = os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.txt')
             np.savetxt(map_txt_path, variable_array2, fmt='%.6e')
-            fig.patch.set_alpha(0)
+            #fig.patch.set_alpha(0) # background transparency
 
             map_name = f'{variable_name}_{cleaned_text}_map.png'
             fname = os.path.basename(map_name)
-            ax.set_title(fname.split(')')[1].split('_map')[0], fontsize=22, fontstyle='italic', loc='left', y=-0.2, x=0.02)
+            ax.set_title(fname.split(')')[1].split('_map')[0], fontsize=48, fontstyle='italic', loc='left', y=0.1, x=0.02)
 
             plt.savefig(os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.png'), dpi=300, bbox_inches='tight')
             plt.close()
@@ -200,8 +200,8 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     #print('Lon min, max: ', lon_min, lon_max)
 
     # Figure and axis
-    fig = plt.figure(figsize=(40, 50))
-    ax = plt.axes(projection=ccrs.Mollweide(central_longitude=25))
+    fig = plt.figure(figsize=(40, 20))
+    ax = plt.axes(projection=ccrs.Robinson())
     #ax.set_extent([-180, 180, -90.0, 90.0], crs=ccrs.PlateCarree())
     ax.set_global()
     #ax.set_extent([lon_min, lon_max, lat_min, lat_max])
@@ -233,8 +233,8 @@ def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
     gl.bottom_labels = True
     gl.left_labels = True
 
-    gl.xlabel_style = {'fontsize': 10}
-    gl.ylabel_style = {'fontsize': 10}
+    gl.xlabel_style = {'fontsize': 26}
+    gl.ylabel_style = {'fontsize': 26}
 
     gl.xpadding = -10
     gl.ypadding = -10
@@ -358,8 +358,8 @@ def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, varia
     # Overlay the actual colorbar on top of the land rectangle
     cb = plt.colorbar(sm, cax=cb_ax, orientation='horizontal')
     #cb = plt.colorbar(sm, cax=cb_ax, orientation='vertical')
-    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=16)
-    cb.ax.tick_params(labelsize=16)
+    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=36)
+    cb.ax.tick_params(labelsize=36)
 
     variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1] if len(variable_name.split('_')) > 1 else variable_name
 
@@ -442,7 +442,7 @@ def make_seasonal_panel_from_txt(
             2,
             2,
             positions[month],
-            projection=ccrs.Mollweide(central_longitude=25)
+            projection=ccrs.PlateCarree()
         )
 
         # replicate world_map styling
@@ -500,7 +500,7 @@ def make_seasonal_panel_from_txt(
             'inferno',
             variable_global_min,
             variable_global_max,
-            [0.47, 0.33, 0.02, 0.33]
+            [0.40, 0.05, 0.20, 0.025]
         )
 
         ax.add_feature(

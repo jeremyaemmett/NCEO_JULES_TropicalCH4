@@ -337,7 +337,7 @@ def daily_to_monthly2(input_file, output_file):
 
     print(f"Monthly averages saved to {output_file}")
 
-task = 'scp'
+task = 'ssh'
 
 if task == 'ssh':
 
@@ -367,7 +367,10 @@ if task == 'scp':
     #         f'/work/scratch-pw5/jae35/u-dk105_{i}_sp2/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc'
     #     )
     #scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/notebooks/diagnostics/african_wetland_ch4_budget.ipynb')
-    scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/jules_data/u-dc921/GSWP3-W5E5_OBSCLIM')
+    #scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/jules_data/u-dc921/GSWP3-W5E5_OBSCLIM')
+    scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/29_07_2026', '/home/users/jae35/cylc-src/u-dk105')
+    scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/29_07_2026', '/home/users/jae35/*.py')
+    scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/29_07_2026', '/home/users/jae35/ensemble')
 
 if task == 'process':
 
