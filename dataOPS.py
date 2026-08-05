@@ -220,6 +220,47 @@ def latlon2area2(latitude, longitude):
     return box_area
 
 
+def latlon2area3(latitude, longitude):
+    """
+    Compute grid cell surface area using spherical approximation.
+
+    Args:
+        latitude: 2D latitude array (degrees)
+        longitude: 2D longitude array (degrees)
+
+    Returns:
+        box_area: 2D grid cell area (m2)
+    """
+    import numpy as np
+
+    R_EARTH = 6.371e6
+
+    latitude = np.asarray(latitude)
+    longitude = np.asarray(longitude)
+
+    # Grid spacing in degrees (same approach as flux calculation)
+    lat_unique = np.unique(latitude.ravel())
+    lon_unique = np.unique(longitude.ravel())
+
+    dlat = np.diff(np.sort(lat_unique))[0]
+    dlon = np.diff(np.sort(lon_unique))[0]
+
+    # Convert to radians
+    dlat_rad = np.deg2rad(dlat)
+    dlon_rad = np.deg2rad(dlon)
+
+    lat_rad = np.deg2rad(latitude)
+
+    # Spherical grid-cell area
+    box_area = (
+        (R_EARTH * dlat_rad)
+        *
+        (R_EARTH * dlon_rad * np.cos(lat_rad))
+    )
+
+    return box_area
+
+
 def bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2):
 
     """Mask mesh-gridded latitudes and longitudes to flag those lying within a specified box-shaped region

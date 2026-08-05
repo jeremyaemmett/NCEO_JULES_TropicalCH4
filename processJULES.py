@@ -62,7 +62,7 @@ def compute_areal_mean2(variable_array, lat2d, lon2d):
     #lat2d, lon2d = (dataOPS.bounded_coords(lat2d, lon2d, lat1, lat2, lon1, lon2))
 
     # Get the areas of the filtered latitudes and longitudes
-    box_areas = dataOPS.latlon2area2(lat2d, lon2d)
+    box_areas = dataOPS.latlon2area3(lat2d, lon2d)
     #print(np.array2string(box_areas, threshold=np.inf))
 
     # Compute the areal mean of the sliced variable

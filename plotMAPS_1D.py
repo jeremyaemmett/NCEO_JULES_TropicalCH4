@@ -18,7 +18,14 @@ import sysOPS
 import os
 
 
-def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False):
+def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False, apply_scale_factor=False):
+
+    scale_factor = 1.0
+    if apply_scale_factor:
+        scale_file = os.path.join(data_path, "scale_factor.txt")
+        with open(scale_file, "r") as f:
+            scale_factor = float(f.read().strip())
+        print("Applying scale factor:", scale_factor)
 
     # Clear all .txt files in the output path
     [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(outp_path) for f in fn if f.endswith('.txt')]
@@ -72,6 +79,14 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
 
         # 2. Sanitize extreme values
         variable_array = dataOPS.sanitize_extreme_values(variable_array)
+
+        # 2b. Optionally apply scale factor to fch4_wetl
+        if apply_scale_factor and variable_name == "fch4_wetl":
+            variable_array *= scale_factor
+
+        # 2c. Convert fch4_wetl from kg C to kg CH4
+        if variable_name == "fch4_wetl":
+            variable_array *= (16.043 / 12.011)
 
         # 3. Map 1D variable to grid
         lat_axis = variable_dims.index(lat_key) if lat_key in variable_dims else None

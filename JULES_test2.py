@@ -33,7 +33,7 @@ def process_workflow(data_path, file_name, year):
     print(' ')
     print('     Making maps...')
     print(' ')
-    plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True)
+    plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=True)
     print(' ')
     print('     Making zonal plots...')
     print(' ')

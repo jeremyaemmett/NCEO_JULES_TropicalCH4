@@ -347,6 +347,7 @@ def make_zonal(data_path, outp_path, file_name, year):
             ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=4.0, color='black')
             ax_zonal_intg.tick_params(direction='in', labelsize=24)
             ax_zonal_intg.yaxis.get_offset_text().set_fontsize(24)
+            print('year-end cumulative (Tg): ', np.nansum(integ_values_cumsum, axis=0)[-1] / 1e9)
 
             plot_title = "Collapsed cumulative"
             #ax4.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')

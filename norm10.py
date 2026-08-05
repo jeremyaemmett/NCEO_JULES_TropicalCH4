@@ -6,14 +6,14 @@ import dataOPS
 from os import listdir
 from os.path import join, isdir
 
-mode = 'ten_year' # single_year
+mode = 'test_year' # single_year
 
 file_path_test = (
     "/Users/jae35/Desktop/alice_output/GSWP3-W5E5_OBSCLIM/"
     "isimip3a_notriffid_gswp3-w5e5_obsclim_historical.gen_mon.1980.nc"
 )
 #file_directory = '/Users/jae35/Desktop/JULES_test_data/sp1/JASMIN_output_u-dk105_3_sp1'
-outer_directory = '/Users/jae35/Desktop/JULES_test_data/sp2/'
+outer_directory = '/Users/jae35/Desktop/JULES_test_data/ID_suites/'
 
 def infer_res(coord):
     u = np.unique(np.round(np.asarray(coord).ravel(), 6))
@@ -122,9 +122,13 @@ if mode == 'test_year':
     totals = []
     total = total_flux(file_path_test)
     totals.append(total)
+
+    scale_factor = 180.0 / total
+
     print(' ')
     print(file_path_test)
     print(f"Global annual total = {total:.2f} Tg CH4 yr-1")
+    print("Scale Factor: ", scale_factor)
 
 def flux_map(flxs, lats, lons):
 

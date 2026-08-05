@@ -15,7 +15,7 @@ def natural_key(s):
 
 root_path = '/Users/jae35/Desktop/JULES_test_data/'
 
-folder = 'test'
+folder = 'ID_suites'
 
 folder_path = os.path.join(root_path, folder)
 
@@ -27,9 +27,9 @@ subfolders = [
 
 subfolders = sorted(subfolders, key=natural_key)
 
-file_name = 'CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2022.nc'
+file_name = 'CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2005.nc'
 
-year = 2022
+year = 2005
 
 for subfolder in subfolders:
 
