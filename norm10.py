@@ -6,7 +6,7 @@ import dataOPS
 from os import listdir
 from os.path import join, isdir
 
-mode = 'test_year' # single_year
+mode = 'ten_year' # single_year
 
 file_path_test = (
     "/Users/jae35/Desktop/alice_output/GSWP3-W5E5_OBSCLIM/"

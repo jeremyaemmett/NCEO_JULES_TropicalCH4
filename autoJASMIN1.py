@@ -338,7 +338,7 @@ def daily_to_monthly2(input_file, output_file):
 
     print(f"Monthly averages saved to {output_file}")
 
-task = 'ssh'
+task = 'scp'
 
 if task == 'ssh':
 
