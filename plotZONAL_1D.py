@@ -20,9 +20,22 @@ import sysOPS
 import os
 
 
-def make_zonal(data_path, outp_path, file_name, year):
+def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
 
-    files = sysOPS.discover_files(outp_path, '_zonalmean_tseries.txt')
+    scale_folder = 'scaled' if apply_scale_factor else 'unscaled'
+
+    zonal_search_path = os.path.join(
+        outp_path,
+        'output',
+        scale_folder
+    )
+
+    print('Looking for zonal files in:', zonal_search_path)
+
+    files = sysOPS.discover_files(
+        zonal_search_path,
+        '_zonalmean_tseries.txt'
+    )
     
     unique_end_directories = sysOPS.get_unique_end_directories(files)
 
@@ -53,14 +66,28 @@ def make_zonal(data_path, outp_path, file_name, year):
 
         # Recover the variable name from the file path
         parts = os.path.normpath(zonal_file).split(os.sep)
+
         try:
             i = parts.index('output')
-            after = parts[i+1:-1]
-            key = after[0] if len(after) <= 1 else after[-2]
-        except ValueError:
+            after = parts[i + 1:-1]
+
+            # Find the actual JULES variable name.
+            # This avoids treating 'scaled'/'unscaled' as a variable.
+            key = next(
+                part for part in after
+                if part in plotPARAMS.variable_names
+            )
+
+        except (ValueError, StopIteration):
             key = os.path.basename(os.path.dirname(zonal_file))
 
-        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(data_path + file_name, key)
+        print('Zonal file:', zonal_file)
+        print('Recovered variable:', key)
+
+        k_array, k_unit, k_long_name, k_dims = readJULES.read_jules_m2(
+            data_path + file_name,
+            key
+        )
 
         #print('k_unit: ', k_unit, ' ', dataOPS.check_if_rate(k_unit))
 

@@ -21,14 +21,28 @@ import os
 def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False, apply_scale_factor=False):
 
     scale_factor = 1.0
+
     if apply_scale_factor:
         scale_file = os.path.join(data_path, "scale_factor.txt")
         with open(scale_file, "r") as f:
             scale_factor = float(f.read().strip())
         print("Applying scale factor:", scale_factor)
 
-    # Clear all .txt files in the output path
-    [os.remove(os.path.join(dp, f)) for dp, dn, fn in os.walk(outp_path) for f in fn if f.endswith('.txt')]
+    # Choose scaled or unscaled output folder
+    output_root = os.path.join(
+        outp_path,
+        'output',
+        'scaled' if apply_scale_factor else 'unscaled'
+    )
+
+    os.makedirs(output_root, exist_ok=True)
+
+    print("Saving outputs to:", output_root)
+
+    # Clear all .txt files in THIS output folder only
+    [os.remove(os.path.join(dp, f))
+     for dp, dn, fn in os.walk(output_root)
+     for f in fn if f.endswith('.txt')]
 
     # Full 'time' array
     times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
@@ -157,15 +171,25 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
             #print('zonal_mean: ', zonal_mean)
             #def compute_zonal_mean(variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
 
-            cleaned_text = str(key_labels).translate(str.maketrans({char: "" for char in "[]',"})).replace(" ", "_").replace(".", "p")
-            save_dir = os.path.join(outp_path, 'output', variable_name)
+            cleaned_text = str(key_labels).translate(
+                str.maketrans({char: "" for char in "[]',"})
+            ).replace(" ", "_").replace(".", "p")
+
+            save_dir = os.path.join(output_root, variable_name)
+
             if sub_folder:
                 save_dir = os.path.join(save_dir, sub_folder)
 
             os.makedirs(save_dir, exist_ok=True)
-            with open(save_dir + '/_zonalmean_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_mean)) + '\n')    
-            with open(save_dir + '/_arealmean_tseries.txt', 'a') as file: file.write(str(areal_mean) + '\n')  
-            with open(save_dir + '/_zonalintg_tseries.txt', 'a') as file: file.write(' '.join(map(str, zonal_intg)) + '\n')
+
+            with open(save_dir + '/_zonalmean_tseries.txt', 'a') as file:
+                file.write(' '.join(map(str, zonal_mean)) + '\n')
+
+            with open(save_dir + '/_arealmean_tseries.txt', 'a') as file:
+                file.write(str(areal_mean) + '\n')
+
+            with open(save_dir + '/_zonalintg_tseries.txt', 'a') as file:
+                file.write(' '.join(map(str, zonal_intg)) + '\n')
 
             # Save 2D map as text file
             map_txt_path = os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.txt')
@@ -419,9 +443,18 @@ def make_seasonal_panel_from_txt(
         variable_unit,
         variable_global_min,
         variable_global_max):
-    
-    lon_min, lon_max = 20, 39
-    lat_min, lat_max = -2, 17
+
+    mode = 'global'
+
+    if mode == 'sudd':
+
+        lon_min, lon_max = 20, 39
+        lat_min, lat_max = -2, 17
+
+    if mode == 'global':
+
+        lon_min, lon_max = -180, 180
+        lat_min, lat_max = -90, 90
 
     months = ['Mar', 'Jun', 'Sep', 'Dec']
 

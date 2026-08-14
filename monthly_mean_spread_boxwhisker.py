@@ -5,11 +5,28 @@ from matplotlib.lines import Line2D
 from matplotlib.patches import Patch, Rectangle
 
 
+# ============================================================
+# SETTINGS
+# ============================================================
+
 directory = Path("/Users/jae35/Desktop/JULES_test_data/ID_suites")
+
+# True  = use scaled data
+# False = use unscaled data
+apply_scale_factor = False
+
+# Automatically select the correct folder
+scale_folder = "scaled" if apply_scale_factor else "unscaled"
+
+
+# ============================================================
+# FIND INPUT FILES
+# ============================================================
 
 files = []
 
 for subdir in sorted(directory.iterdir()):
+
     if not subdir.is_dir():
         continue
 
@@ -23,26 +40,45 @@ for subdir in sorted(directory.iterdir()):
     except IndexError:
         continue
 
+    # Read from either:
+    #
+    # plots/output/scaled/fch4_wetl/
+    #
+    # or:
+    #
+    # plots/output/unscaled/fch4_wetl/
+    #
     filepath = (
         subdir
         / "plots"
         / "output"
+        / scale_folder
         / "fch4_wetl"
         / "_arealmean_tseries.txt"
     )
 
     if filepath.exists():
+
         files.append(
-            (name, substrate, q10, soilmap, filepath)
+            (
+                name,
+                substrate,
+                q10,
+                soilmap,
+                filepath
+            )
         )
 
 
+print("========================================")
+print("Scale mode:", scale_folder)
 print("Suites plotted:", len(files))
+print("========================================")
 
 
-# -------------------------------------------------
-# Visual encoding
-# -------------------------------------------------
+# ============================================================
+# VISUAL ENCODING
+# ============================================================
 
 substrates = ["0", "1", "2"]
 
@@ -69,9 +105,9 @@ months = [
 ]
 
 
-# -------------------------------------------------
-# Read data
-# -------------------------------------------------
+# ============================================================
+# READ DATA
+# ============================================================
 
 all_data = []
 metadata = []
@@ -92,26 +128,41 @@ for name, substrate, q10, soilmap, filepath in files:
     )
 
 
+if len(all_data) == 0:
+    raise RuntimeError(
+        f"No input files found in '{scale_folder}' folders."
+    )
+
+
 all_data = np.array(all_data)
 metadata = np.array(metadata)
 
 x = np.arange(12)
 
 
-# -------------------------------------------------
-# Ensemble mean ±1 SD
-# -------------------------------------------------
+# ============================================================
+# ENSEMBLE MEAN ±1 SD
+# ============================================================
 
 ensemble_mean = np.mean(all_data, axis=0)
-ensemble_std = np.std(all_data, axis=0)
 
-ensemble_lower = ensemble_mean - ensemble_std
-ensemble_upper = ensemble_mean + ensemble_std
+ensemble_std = np.std(
+    all_data,
+    axis=0
+)
+
+ensemble_lower = (
+    ensemble_mean - ensemble_std
+)
+
+ensemble_upper = (
+    ensemble_mean + ensemble_std
+)
 
 
-# -------------------------------------------------
-# Six substrate × soil combinations
-# -------------------------------------------------
+# ============================================================
+# SIX SUBSTRATE × SOIL COMBINATIONS
+# ============================================================
 
 combo_order = [
     ("0", "0"),
@@ -121,7 +172,6 @@ combo_order = [
     ("1", "1"),
     ("2", "1")
 ]
-
 
 combo_data = {}
 
@@ -137,16 +187,18 @@ for combo in combo_order:
     combo_data[combo] = all_data[mask]
 
 
-# -------------------------------------------------
-# Plot
-# -------------------------------------------------
+# ============================================================
+# PLOT
+# ============================================================
 
-fig, ax = plt.subplots(figsize=(16, 8))
+fig, ax = plt.subplots(
+    figsize=(16, 8)
+)
 
 
-# -------------------------------------------------
-# Touching boxplots
-# -------------------------------------------------
+# ============================================================
+# TOUCHING BOXPLOTS
+# ============================================================
 
 substrate_offsets = {
     "0": -0.12,
@@ -164,14 +216,19 @@ for combo in combo_order:
 
     substrate, soil = combo
 
+    # Skip combinations for which there are no suites
     if combo_data[combo].shape[0] == 0:
         continue
 
-    offset = soil_centers[soil] + substrate_offsets[substrate]
+    offset = (
+        soil_centers[soil]
+        + substrate_offsets[substrate]
+    )
 
     positions = x + offset
 
     ax.boxplot(
+
         combo_data[combo],
 
         positions=positions,
@@ -209,61 +266,88 @@ for combo in combo_order:
     )
 
 
-# -------------------------------------------------
-# Ensemble mean ±1 SD
-# -------------------------------------------------
+# ============================================================
+# ENSEMBLE MEAN ±1 SD
+# ============================================================
 
 ax.fill_between(
+
     x,
+
     ensemble_lower,
+
     ensemble_upper,
+
     color="grey",
+
     alpha=0.30,
+
     zorder=2
 )
 
 
 ax.plot(
+
     x,
+
     ensemble_mean,
+
     color="black",
+
     linewidth=3,
+
     zorder=5
 )
 
 
-# -------------------------------------------------
-# Formatting
-# -------------------------------------------------
+# ============================================================
+# FORMATTING
+# ============================================================
 
 ax.set_xticks(x)
+
 ax.set_xticklabels(months)
 
 ax.set_xlabel("Month")
+
 ax.set_ylabel("f$_{CH4}$")
 
 ax.set_title(
-    "Global Mean f$_{CH4}$ Ensemble"
+    "Global Mean f$_{CH4}$ Ensemble (2005)"
 )
 
-ax.grid(alpha=0.3)
+ax.grid(
+    alpha=0.3
+)
 
 
-# -------------------------------------------------
-# Legends (side-by-side in upper left)
-# -------------------------------------------------
+# ============================================================
+# LEGENDS
+# ============================================================
+
+# ------------------------------------------------------------
+# Substrate legend
+# ------------------------------------------------------------
 
 substrate_handles = [
+
     Patch(
         facecolor=color_map[s],
         alpha=0.65,
         label=substrate_labels[s]
     )
+
     for s in substrates
+
 ]
 
 
+# ------------------------------------------------------------
+# Soil map legend
+# ------------------------------------------------------------
+
 soil_handles = [
+
     Patch(
         facecolor="white",
         edgecolor="black",
@@ -271,11 +355,18 @@ soil_handles = [
         alpha=0.65,
         label=soil_labels[soil]
     )
+
     for soil in ["0", "1"]
+
 ]
 
 
+# ------------------------------------------------------------
+# Ensemble legend
+# ------------------------------------------------------------
+
 summary_handles = [
+
     Line2D(
         [0],
         [0],
@@ -289,44 +380,110 @@ summary_handles = [
         alpha=0.30,
         label="±1 SD"
     )
+
 ]
 
 
+# ------------------------------------------------------------
 # Substrate legend
+# ------------------------------------------------------------
+
 leg1 = ax.legend(
+
     handles=substrate_handles,
+
     title="Substrate",
+
     loc="upper left",
+
     bbox_to_anchor=(0.01, 0.99),
+
     frameon=False
 )
 
 ax.add_artist(leg1)
 
 
+# ------------------------------------------------------------
 # Soil legend
+# ------------------------------------------------------------
+
 leg2 = ax.legend(
+
     handles=soil_handles,
+
     title="Soil map",
+
     loc="upper left",
+
     bbox_to_anchor=(0.10, 0.99),
+
     frameon=False
 )
 
 ax.add_artist(leg2)
 
 
+# ------------------------------------------------------------
 # Ensemble legend
+# ------------------------------------------------------------
+
 leg3 = ax.legend(
+
     handles=summary_handles,
+
     title="Ensemble",
+
     loc="upper left",
+
     bbox_to_anchor=(0.28, 0.99),
+
     frameon=False
 )
 
 ax.add_artist(leg3)
 
+
+# ============================================================
+# SAVE
+# ============================================================
+
 plt.tight_layout()
 
-plt.show()
+
+# Output goes directly into:
+#
+# ID_suites/scaled/
+#
+# or:
+#
+# ID_suites/unscaled/
+
+output_dir = directory / scale_folder
+
+output_dir.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+
+output_file = (
+    output_dir
+    / "monthly_mean_spread_boxwhisker.png"
+)
+
+
+plt.savefig(
+
+    output_file,
+
+    dpi=300,
+
+    bbox_inches="tight"
+)
+
+
+plt.close()
+
+
+print("Saved:", output_file)
