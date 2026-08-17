@@ -338,7 +338,7 @@ def daily_to_monthly2(input_file, output_file):
 
     print(f"Monthly averages saved to {output_file}")
 
-task = 'ssh'
+task = 'scp'
 
 if task == 'ssh':
 
@@ -362,13 +362,13 @@ if task == 'scp':
     #scp_from_jasmin('/Users/jae35/Desktop', '/gws/ssde/j25a/jules/eleanorburke/TRENDY/jules_ancils/qrparm.soil.dust.merge-plus-soil_kaolinitic_oxisols_ultisols_dominant_vn2.nc')
     #scp_from_jasmin('/Users/jae35/Desktop/racc_stuff', '/home/users/wt164277/saber_exps/figure_eastward_wind.png')
     #scp_from_jasmin('/Users/jae35/Desktop/JULES_test_data/sp1/JASMIN_output_u-dk105_4_sp1', '/work/scratch-pw5/jae35/u-dk105_4_sp1/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc')
-    #for d in Path("/Users/jae35/Desktop/JULES_test_data/ID_suites").glob("u-dk105_[0-9][0-9][0-9]"):
-    #    name = d.name
-    #    
-    #    scp_from_jasmin(
-    #        f"/Users/jae35/Desktop/JULES_test_data/ID_suites/{name}",
-    #        f"/work/scratch-pw5/jae35/{name}/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc"
-    #    )
+    for d in Path("/Users/jae35/Desktop/JULES_test_data/ID_suites").glob("u-dk105_[0-9][0-9][0-9][0-9]"):
+        name = d.name
+        
+        scp_from_jasmin(
+            f"/Users/jae35/Desktop/JULES_test_data/ID_suites/{name}",
+            f"/work/scratch-pw5/jae35/{name}/selpts/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.20*.nc"
+        )
 
     # for i in range(1, 12 + 1):
     #     scp_from_jasmin(
@@ -377,9 +377,9 @@ if task == 'scp':
     #     )
     #scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/notebooks/diagnostics/african_wetland_ch4_budget.ipynb')
     #scp_from_alice('/Users/jae35/Desktop/alice_output', '/data/dte/rjp23/WetEm/jules_data/u-dc921/GSWP3-W5E5_OBSCLIM')
-    scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/06_08_2026', '/home/users/jae35/cylc-src/u-dk105')
-    scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/06_08_2026', '/home/users/jae35/*.py')
-    scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/06_08_2026', '/home/users/jae35/ensemble')
+    #scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/06_08_2026', '/home/users/jae35/cylc-src/u-dk105')
+    #scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/06_08_2026', '/home/users/jae35/*.py')
+    #scp_from_jasmin('/Users/jae35/Desktop/jasmin_duplicates/06_08_2026', '/home/users/jae35/ensemble')
 
 if task == 'process':
 

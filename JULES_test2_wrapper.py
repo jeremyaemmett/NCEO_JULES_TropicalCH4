@@ -23,7 +23,8 @@ folder_path = os.path.join(root_path, folder)
 subfolders = [
     os.path.join(folder_path, name + '/')
     for name in os.listdir(folder_path)
-    if os.path.isdir(os.path.join(folder_path, name))
+    if name.startswith('u-')
+    and os.path.isdir(os.path.join(folder_path, name))
 ]
 
 subfolders = sorted(subfolders, key=natural_key)

@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.patches import Patch, Rectangle
+from matplotlib.patches import Patch
 
 
 # ============================================================
@@ -32,11 +32,22 @@ for subdir in sorted(directory.iterdir()):
 
     name = subdir.name
 
+    # Only consider suite directories
+    # e.g. u-dk105_0110
+    if not name.startswith("u-dk105_"):
+        continue
+
     try:
         code = name.split("_")[1]
+
+        if len(code) != 4:
+            continue
+
         substrate = code[0]
         q10 = code[1]
         soilmap = code[2]
+        dynamics = code[3]
+
     except IndexError:
         continue
 
@@ -47,7 +58,7 @@ for subdir in sorted(directory.iterdir()):
     # or:
     #
     # plots/output/unscaled/fch4_wetl/
-    #
+
     filepath = (
         subdir
         / "plots"
@@ -65,6 +76,7 @@ for subdir in sorted(directory.iterdir()):
                 substrate,
                 q10,
                 soilmap,
+                dynamics,
                 filepath
             )
         )
@@ -94,10 +106,30 @@ substrate_labels = {
     "2": "Resps"
 }
 
+
 soil_labels = {
     "0": "Standard",
     "1": "Oxi + Ulti"
 }
+
+
+# Plant dynamics
+#
+# 0 = non-dynamic
+# 1 = dynamic
+#
+# Dynamic boxes and whiskers are made more transparent.
+
+dynamics_alpha = {
+    "0": 0.65,
+    "1": 0.30
+}
+
+dynamics_labels = {
+    "0": "Competitive",
+    "1": "Non-competitive"
+}
+
 
 months = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -112,7 +144,14 @@ months = [
 all_data = []
 metadata = []
 
-for name, substrate, q10, soilmap, filepath in files:
+for (
+    name,
+    substrate,
+    q10,
+    soilmap,
+    dynamics,
+    filepath
+) in files:
 
     y = np.loadtxt(filepath)
 
@@ -124,7 +163,12 @@ for name, substrate, q10, soilmap, filepath in files:
     all_data.append(y)
 
     metadata.append(
-        (substrate, soilmap, q10)
+        (
+            substrate,
+            soilmap,
+            q10,
+            dynamics
+        )
     )
 
 
@@ -144,7 +188,10 @@ x = np.arange(12)
 # ENSEMBLE MEAN ±1 SD
 # ============================================================
 
-ensemble_mean = np.mean(all_data, axis=0)
+ensemble_mean = np.mean(
+    all_data,
+    axis=0
+)
 
 ensemble_std = np.std(
     all_data,
@@ -179,12 +226,17 @@ for combo in combo_order:
 
     substrate, soil = combo
 
-    mask = (
-        (metadata[:, 0] == substrate) &
-        (metadata[:, 1] == soil)
-    )
+    combo_data[combo] = {}
 
-    combo_data[combo] = all_data[mask]
+    for dynamics in ["0", "1"]:
+
+        mask = (
+            (metadata[:, 0] == substrate) &
+            (metadata[:, 1] == soil) &
+            (metadata[:, 3] == dynamics)
+        )
+
+        combo_data[combo][dynamics] = all_data[mask]
 
 
 # ============================================================
@@ -197,8 +249,22 @@ fig, ax = plt.subplots(
 
 
 # ============================================================
-# TOUCHING BOXPLOTS
+# POSITIONING
 # ============================================================
+#
+# Overall structure:
+#
+#          Standard soil             Oxi + Ulti
+#
+#       C       N       R         C       N       R
+#      ND D    ND D    ND D      ND D    ND D    ND D
+#
+# Each dynamic/non-dynamic pair sits immediately beside
+# the corresponding box.
+#
+
+
+# Position of the three substrates within each soil group
 
 substrate_offsets = {
     "0": -0.12,
@@ -206,64 +272,102 @@ substrate_offsets = {
     "2":  0.12
 }
 
+
+# Position of the two soil-map groups
+
 soil_centers = {
     "0": -0.24,
     "1":  0.24
 }
 
 
+# Small offset separating non-dynamic and dynamic boxes
+
+dynamics_offsets = {
+    "0": -0.030,   # non-dynamic
+    "1":  0.030    # dynamic
+}
+
+
+# Width of each individual box
+
+box_width = 0.055
+
+
+# ============================================================
+# BOXPLOTS
+# ============================================================
+
 for combo in combo_order:
 
     substrate, soil = combo
 
-    # Skip combinations for which there are no suites
-    if combo_data[combo].shape[0] == 0:
-        continue
+    for dynamics in ["0", "1"]:
 
-    offset = (
-        soil_centers[soil]
-        + substrate_offsets[substrate]
-    )
+        data = combo_data[combo][dynamics]
 
-    positions = x + offset
+        # Skip combinations for which there are no suites
 
-    ax.boxplot(
+        if data.shape[0] == 0:
+            continue
 
-        combo_data[combo],
+        base_offset = (
+            soil_centers[soil]
+            + substrate_offsets[substrate]
+        )
 
-        positions=positions,
+        offset = (
+            base_offset
+            + dynamics_offsets[dynamics]
+        )
 
-        widths=0.12,
+        positions = x + offset
 
-        # Whiskers extend to extreme values
-        whis=(0, 100),
+        alpha = dynamics_alpha[dynamics]
 
-        patch_artist=True,
+        ax.boxplot(
 
-        boxprops=dict(
-            facecolor=color_map[substrate],
-            hatch="///" if soil == "1" else "",
-            alpha=0.65,
-            linewidth=1.2
-        ),
+            data,
 
-        medianprops=dict(
-            color="black",
-            linewidth=1.3
-        ),
+            positions=positions,
 
-        whiskerprops=dict(
-            linewidth=1
-        ),
+            widths=box_width,
 
-        capprops=dict(
-            linewidth=1
-        ),
+            # Whiskers extend to extreme values
 
-        showfliers=False,
+            whis=(0, 100),
 
-        zorder=4
-    )
+            patch_artist=True,
+
+            boxprops=dict(
+                facecolor=color_map[substrate],
+                edgecolor="black",
+                hatch="///" if soil == "1" else "",
+                alpha=alpha,
+                linewidth=1.2
+            ),
+
+            medianprops=dict(
+                color="black",
+                linewidth=1.3
+            ),
+
+            whiskerprops=dict(
+                color="black",
+                linewidth=1,
+                alpha=alpha
+            ),
+
+            capprops=dict(
+                color="black",
+                linewidth=1,
+                alpha=alpha
+            ),
+
+            showfliers=False,
+
+            zorder=4
+        )
 
 
 # ============================================================
@@ -313,7 +417,8 @@ ax.set_xlabel("Month")
 ax.set_ylabel("f$_{CH4}$")
 
 ax.set_title(
-    "Global Mean f$_{CH4}$ Ensemble (2005)"
+    f"Global Mean f$_{{CH4}}$ Ensemble (2005) — "
+    f"{scale_folder.capitalize()}"
 )
 
 ax.grid(
@@ -325,6 +430,7 @@ ax.grid(
 # LEGENDS
 # ============================================================
 
+
 # ------------------------------------------------------------
 # Substrate legend
 # ------------------------------------------------------------
@@ -333,7 +439,8 @@ substrate_handles = [
 
     Patch(
         facecolor=color_map[s],
-        alpha=0.65,
+        edgecolor="black",
+        alpha=dynamics_alpha["0"],
         label=substrate_labels[s]
     )
 
@@ -352,11 +459,28 @@ soil_handles = [
         facecolor="white",
         edgecolor="black",
         hatch="///" if soil == "1" else "",
-        alpha=0.65,
         label=soil_labels[soil]
     )
 
     for soil in ["0", "1"]
+
+]
+
+
+# ------------------------------------------------------------
+# Plant dynamics legend
+# ------------------------------------------------------------
+
+dynamics_handles = [
+
+    Patch(
+        facecolor="grey",
+        edgecolor="black",
+        alpha=dynamics_alpha[d],
+        label=dynamics_labels[d]
+    )
+
+    for d in ["0", "1"]
 
 ]
 
@@ -384,9 +508,9 @@ summary_handles = [
 ]
 
 
-# ------------------------------------------------------------
-# Substrate legend
-# ------------------------------------------------------------
+# ============================================================
+# SUBSTRATE LEGEND
+# ============================================================
 
 leg1 = ax.legend(
 
@@ -399,14 +523,15 @@ leg1 = ax.legend(
     bbox_to_anchor=(0.01, 0.99),
 
     frameon=False
+
 )
 
 ax.add_artist(leg1)
 
 
-# ------------------------------------------------------------
-# Soil legend
-# ------------------------------------------------------------
+# ============================================================
+# SOIL MAP LEGEND
+# ============================================================
 
 leg2 = ax.legend(
 
@@ -419,16 +544,38 @@ leg2 = ax.legend(
     bbox_to_anchor=(0.10, 0.99),
 
     frameon=False
+
 )
 
 ax.add_artist(leg2)
 
 
-# ------------------------------------------------------------
-# Ensemble legend
-# ------------------------------------------------------------
+# ============================================================
+# PLANT DYNAMICS LEGEND
+# ============================================================
 
 leg3 = ax.legend(
+
+    handles=dynamics_handles,
+
+    title="Plants",
+
+    loc="upper left",
+
+    bbox_to_anchor=(0.19, 0.99),
+
+    frameon=False
+
+)
+
+ax.add_artist(leg3)
+
+
+# ============================================================
+# ENSEMBLE LEGEND
+# ============================================================
+
+leg4 = ax.legend(
 
     handles=summary_handles,
 
@@ -436,12 +583,13 @@ leg3 = ax.legend(
 
     loc="upper left",
 
-    bbox_to_anchor=(0.28, 0.99),
+    bbox_to_anchor=(0.35, 0.99),
 
     frameon=False
+
 )
 
-ax.add_artist(leg3)
+ax.add_artist(leg4)
 
 
 # ============================================================
@@ -469,7 +617,7 @@ output_dir.mkdir(
 
 output_file = (
     output_dir
-    / "monthly_mean_spread_boxwhisker.png"
+    / "monthly_mean_spread_boxwhisker_dynamics.png"
 )
 
 
@@ -480,6 +628,7 @@ plt.savefig(
     dpi=300,
 
     bbox_inches="tight"
+
 )
 
 
