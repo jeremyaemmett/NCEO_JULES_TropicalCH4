@@ -18,7 +18,7 @@ import sysOPS
 import os
 
 
-def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False, apply_scale_factor=False):
+def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False, apply_scale_factor=False, latitude_bounds=None):
 
     scale_factor = 1.0
 
@@ -64,8 +64,27 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
     lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, lon_string)
     
     # Flatten 1D arrays and infer grid
-    lats_flat = lats.flatten()
-    lons_flat = lons.flatten()
+    lats_flat_full = lats.flatten()
+    lons_flat_full = lons.flatten()
+
+    # Optionally restrict latitude range
+    if latitude_bounds is not None:
+        lat_min, lat_max = latitude_bounds
+
+        lat_mask = (lats_flat_full >= lat_min) & (lats_flat_full <= lat_max)
+
+        if not np.any(lat_mask):
+            raise ValueError(f"No latitude points found between {lat_min} and {lat_max}")
+
+        print(f"Restricting latitude range to {lat_min} to {lat_max}")
+
+    else:
+        lat_mask = np.ones(lats_flat_full.shape, dtype=bool)
+
+    # Apply the same mask to latitude and longitude
+    lats_flat = lats_flat_full[lat_mask]
+    lons_flat = lons_flat_full[lat_mask]
+
     lats_unique = np.sort(np.unique(lats_flat))
     lons_unique = np.sort(np.unique(lons_flat))
     dlat = np.median(np.diff(lats_unique))
@@ -119,9 +138,13 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
                 orig_idx.insert(lon_axis if lon_axis < len(orig_idx) else len(orig_idx), slice(None))
             
             flat_values = variable_array[tuple(orig_idx)].flatten()
-            if flat_values.size != lat_idx.size:
-                raise ValueError(f"Mismatch between flat_values ({flat_values.size}) and lat/lon points ({lat_idx.size})")
-            
+
+            if flat_values.size != lats_flat_full.size:
+                raise ValueError(f"Mismatch between flat_values ({flat_values.size}) and lat/lon points ({lats_flat_full.size})")
+
+            # Apply the same latitude mask to the variable
+            flat_values = flat_values[lat_mask]
+
             var_grid[idx + (lat_idx, lon_idx)] = flat_values
 
         variable_array = var_grid
@@ -212,6 +235,7 @@ def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=Fals
             variable_unit,
             *dataOPS.globalMinMax(variable_array, variable_unit)
         )
+
 
 def make_animated_maps(data_path, outp_path, file_name, year):
 

@@ -9,11 +9,12 @@ from matplotlib.patches import Patch
 # SETTINGS
 # ============================================================
 
-directory = Path("/Users/jae35/Desktop/JULES_test_data/ID_suites")
+directory = Path("/Users/jae35/Desktop/JULES_test_data/test")
 
 # True  = use scaled data
 # False = use unscaled data
-apply_scale_factor = True
+apply_scale_factor = False
+mode_folder = "band"
 
 scale_folder = "scaled" if apply_scale_factor else "unscaled"
 
@@ -60,6 +61,7 @@ for subdir in sorted(directory.iterdir()):
     filepath = (
         subdir
         / "plots"
+        / mode_folder
         / "output"
         / scale_folder
         / "fch4_wetl"
@@ -648,8 +650,7 @@ axes[1, 0].yaxis.labelpad = 12
 fig.text(
     0.055,
     0.965,
-    f"Global Mean f$_{{CH4}}$ - "
-    f"{scale_folder.capitalize()}",
+    mode_folder.capitalize() + r" Mean f$_{CH4}$ - " + scale_folder.capitalize(),
     ha="left",
     va="center",
     fontsize=16,

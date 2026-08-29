@@ -1,0 +1,3054 @@
+from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch, Rectangle
+from matplotlib.colors import (
+    to_rgba,
+    LinearSegmentedColormap,
+    Normalize
+)
+from matplotlib.cm import ScalarMappable
+
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+
+import dataOPS
+import readJULES
+
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
+directory = Path(
+    "/Users/jae35/Desktop/JULES_test_data/test"
+)
+
+apply_scale_factor = True
+
+mode_folder = "band"
+
+scale_folder = (
+    "scaled"
+    if apply_scale_factor
+    else "unscaled"
+)
+
+variable = "fch4_wetl"
+
+
+# =========================================================
+# SELECTED Q10
+# =========================================================
+
+SELECTED_Q10_CODE = "1"
+
+
+print(
+    "Using:",
+    scale_folder,
+    "data"
+)
+
+print(
+    "Looking in:",
+    directory
+)
+
+print(
+    "Selected Q10 code:",
+    SELECTED_Q10_CODE
+)
+
+print(
+    "Selected Q10 value:",
+    "2.0"
+)
+
+print()
+
+
+# =========================================================
+# MAP SETTINGS
+# =========================================================
+
+MAP_MONTHS = [
+    "Mar",
+    "Sep",
+]
+
+MAP_CMAP = "jet"
+
+MAP_VMIN = 0.0
+MAP_VMAX = 0.25
+
+MAP_LAT_MIN = -40
+MAP_LAT_MAX = 40
+
+MAP_LON_MIN = -140
+MAP_LON_MAX = 170
+
+
+# =========================================================
+# PANEL -> BASE SUITE
+# =========================================================
+
+PANEL_BASE_SUITES = {
+    ("0", "0"): "u-dk105_0000",
+    ("0", "1"): "u-dk105_0001",
+    ("1", "0"): "u-dk105_0010",
+    ("1", "1"): "u-dk105_0011",
+}
+
+
+# =========================================================
+# FIND FILES
+# =========================================================
+
+files = []
+
+for subdir in sorted(directory.iterdir()):
+
+    if not subdir.is_dir():
+        continue
+
+    name = subdir.name
+
+    if not name.startswith("u-dk105_"):
+        continue
+
+    code = name.split("_")[1]
+
+    if len(code) != 4:
+
+        print(
+            "WARNING:",
+            name,
+            "does not contain 4 digits"
+        )
+
+        continue
+
+    substrate = code[0]
+    q10 = code[1]
+    soilmap = code[2]
+    dynamics = code[3]
+
+    filepath = (
+        subdir
+        / "plots"
+        / mode_folder
+        / "output"
+        / scale_folder
+        / "fch4_wetl"
+        / "_arealmean_tseries.txt"
+    )
+
+    if filepath.exists():
+
+        print(
+            f"Found {name}: "
+            f"substrate={substrate}, "
+            f"Q10={q10}, "
+            f"soilmap={soilmap}, "
+            f"plants={dynamics}"
+        )
+
+        files.append(
+            (
+                name,
+                substrate,
+                q10,
+                soilmap,
+                dynamics,
+                filepath
+            )
+        )
+
+    else:
+
+        print(
+            "NOT FOUND:",
+            filepath
+        )
+
+
+# =========================================================
+# DIAGNOSTICS
+# =========================================================
+
+print()
+print(
+    "==============================================="
+)
+
+print(
+    "Suites plotted:",
+    len(files)
+)
+
+print(
+    "Substrate codes found:",
+    sorted(
+        set(
+            f[1]
+            for f in files
+        )
+    )
+)
+
+print(
+    "Q10 codes found:",
+    sorted(
+        set(
+            f[2]
+            for f in files
+        )
+    )
+)
+
+print(
+    "Soil map codes found:",
+    sorted(
+        set(
+            f[3]
+            for f in files
+        )
+    )
+)
+
+print(
+    "Plant modes found:",
+    sorted(
+        set(
+            f[4]
+            for f in files
+        )
+    )
+)
+
+print(
+    "Selected Q10 code:",
+    SELECTED_Q10_CODE
+)
+
+print(
+    "Selected Q10 value:",
+    "2.0"
+)
+
+print(
+    "==============================================="
+)
+
+
+# =========================================================
+# VISUAL ENCODING
+# =========================================================
+
+substrates = [
+    "1",
+    "2",
+    "0"
+]
+
+
+color_map = {
+    "0": "saddlebrown",
+    "1": "forestgreen",
+    "2": "royalblue"
+}
+
+
+substrate_labels = {
+    "0": "Carb",
+    "1": "NPP",
+    "2": "Resp"
+}
+
+
+# ---------------------------------------------------------
+# Q10 alpha values
+# ---------------------------------------------------------
+
+q10_alpha = {
+    "0": 0.10,
+    "1": 0.25,
+    "2": 0.50,
+    "3": 0.80
+}
+
+
+q10_labels = {
+    "0": "1.0",
+    "1": "2.0",
+    "2": "3.0",
+    "3": "4.0"
+}
+
+
+panel_background = "gainsboro"
+
+ensemble_fill_color = "white"
+
+
+soil_labels = {
+    "0": "Standard",
+    "1": "Oxi + Ulti"
+}
+
+
+dynamics_labels = {
+    "0": "Competitive",
+    "1": "Non-competitive"
+}
+
+
+months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+]
+
+
+# =========================================================
+# LOAD ALL TIME-SERIES DATA
+# =========================================================
+
+loaded_data = []
+
+
+for (
+    name,
+    substrate,
+    q10,
+    soilmap,
+    dynamics,
+    filepath
+) in files:
+
+    y = np.asarray(
+        np.loadtxt(
+            filepath
+        ),
+        dtype=float
+    )
+
+    if y.ndim != 1:
+        y = y.squeeze()
+
+    loaded_data.append(
+        (
+            name,
+            substrate,
+            q10,
+            soilmap,
+            dynamics,
+            filepath,
+            y
+        )
+    )
+
+
+if len(loaded_data) == 0:
+
+    raise RuntimeError(
+        "No data files were found."
+    )
+
+
+# =========================================================
+# CHECK SERIES LENGTH
+# =========================================================
+
+series_lengths = {
+    len(item[6])
+    for item in loaded_data
+}
+
+
+if len(series_lengths) != 1:
+
+    raise RuntimeError(
+        "Not all time series have the same length: "
+        + str(
+            sorted(series_lengths)
+        )
+    )
+
+
+series_length = next(
+    iter(series_lengths)
+)
+
+
+# =========================================================
+# MASTER ENSEMBLE
+# =========================================================
+
+all_series = np.vstack(
+    [
+        item[6]
+        for item in loaded_data
+    ]
+)
+
+
+master_x = np.arange(
+    series_length
+)
+
+
+master_lower = np.min(
+    all_series,
+    axis=0
+)
+
+
+master_upper = np.max(
+    all_series,
+    axis=0
+)
+
+
+# =========================================================
+# Y AXIS RANGE
+# =========================================================
+
+finite_nonzero_values = all_series[
+    np.isfinite(all_series)
+    &
+    (all_series != 0)
+]
+
+
+if finite_nonzero_values.size == 0:
+
+    raise RuntimeError(
+        "Could not determine a non-zero finite "
+        "minimum for the y-axis."
+    )
+
+
+global_y_min = 0.025
+
+
+global_y_max = 0.075
+
+
+y_padding = (
+    global_y_max
+    - global_y_min
+) * 0.01
+
+
+if y_padding == 0:
+
+    y_padding = (
+        abs(global_y_max)
+        * 0.01
+        if global_y_max != 0
+        else 0.01
+    )
+
+
+plot_y_min = global_y_min
+
+plot_y_max = (
+    global_y_max
+    + y_padding
+)
+
+
+# =========================================================
+# PRINT MASTER ENSEMBLE
+# =========================================================
+
+print()
+print(
+    "==============================================="
+)
+
+print(
+    "MASTER ENSEMBLE"
+)
+
+print(
+    "Members:",
+    len(loaded_data)
+)
+
+print(
+    "Length:",
+    series_length
+)
+
+print(
+    "Minimum non-zero value:",
+    global_y_min
+)
+
+print(
+    "Maximum:",
+    global_y_max
+)
+
+print(
+    "Plot y minimum:",
+    plot_y_min
+)
+
+print(
+    "Plot y maximum:",
+    plot_y_max
+)
+
+print(
+    "==============================================="
+)
+
+
+# =========================================================
+# Q10 BAND FUNCTION
+# =========================================================
+
+def plot_smooth_q10_band(
+    ax,
+    x,
+    q10_data,
+    color,
+    alpha_map,
+    y_axis_min,
+    y_axis_max,
+    zorder=1
+):
+
+    q10_codes = sorted(
+        q10_data.keys(),
+        key=lambda q: int(q)
+    )
+
+    if len(q10_codes) < 2:
+        return
+
+    y_values = np.array(
+        [
+            q10_data[q]
+            for q in q10_codes
+        ],
+        dtype=float
+    )
+
+    alpha_values = np.array(
+        [
+            alpha_map[q]
+            for q in q10_codes
+        ],
+        dtype=float
+    )
+
+    n_x = max(
+        2400,
+        series_length * 250
+    )
+
+    x_fine = np.linspace(
+        x[0],
+        x[-1],
+        n_x
+    )
+
+    y_fine = np.empty(
+        (
+            len(q10_codes),
+            n_x
+        ),
+        dtype=float
+    )
+
+    for i in range(len(q10_codes)):
+
+        y_fine[i] = np.interp(
+            x_fine,
+            x,
+            y_values[i]
+        )
+
+    n_y = 1800
+
+    y_grid = np.linspace(
+        y_axis_min,
+        y_axis_max,
+        n_y
+    )
+
+    alpha_field = np.zeros(
+        (
+            n_y,
+            n_x
+        ),
+        dtype=np.float32
+    )
+
+    for j in range(n_x):
+
+        column_y = y_fine[:, j]
+
+        order = np.argsort(
+            column_y
+        )
+
+        y_sorted = column_y[order]
+
+        alpha_sorted = alpha_values[order]
+
+        y_unique, unique_indices = np.unique(
+            y_sorted,
+            return_index=True
+        )
+
+        alpha_unique = alpha_sorted[
+            unique_indices
+        ]
+
+        if len(y_unique) < 2:
+            continue
+
+        inside = (
+            (y_grid >= y_unique[0])
+            &
+            (y_grid <= y_unique[-1])
+        )
+
+        if not np.any(inside):
+            continue
+
+        alpha_field[
+            inside,
+            j
+        ] = np.interp(
+            y_grid[inside],
+            y_unique,
+            alpha_unique
+        )
+
+    rgba = np.array(
+        to_rgba(color)
+    )
+
+    image = np.empty(
+        (
+            n_y,
+            n_x,
+            4
+        ),
+        dtype=np.float32
+    )
+
+    image[:, :, 0] = rgba[0]
+    image[:, :, 1] = rgba[1]
+    image[:, :, 2] = rgba[2]
+    image[:, :, 3] = alpha_field
+
+    # =====================================================
+    # DRAW SMOOTH Q10 COLLAR
+    # =====================================================
+
+    ax.imshow(
+        image,
+        origin="lower",
+        aspect="auto",
+        interpolation="bilinear",
+        extent=[
+            x_fine[0],
+            x_fine[-1],
+            y_axis_min,
+            y_axis_max
+        ],
+        zorder=zorder
+    )
+
+    # =====================================================
+    # EMPHASISE TOP AND BOTTOM OF EACH COLLARED BAND
+    # =====================================================
+
+    COLLAR_BOUNDARY_LINEWIDTH = 0.55
+    COLLAR_BOUNDARY_ALPHA = 0.90
+
+    ax.plot(
+        x_fine,
+        y_fine[0],
+        color=color,
+        linestyle="-",
+        linewidth=COLLAR_BOUNDARY_LINEWIDTH,
+        alpha=COLLAR_BOUNDARY_ALPHA,
+        zorder=zorder + 0.25
+    )
+
+    ax.plot(
+        x_fine,
+        y_fine[-1],
+        color=color,
+        linestyle="-",
+        linewidth=COLLAR_BOUNDARY_LINEWIDTH,
+        alpha=COLLAR_BOUNDARY_ALPHA,
+        zorder=zorder + 0.25
+    )
+
+
+# =========================================================
+# SELECTED Q10 DOTTED LINE
+# =========================================================
+
+def plot_q10_line(
+    ax,
+    x,
+    y,
+    substrate,
+    q10_code=SELECTED_Q10_CODE,
+    linewidth=1.3,
+    zorder=4
+):
+
+    base_rgba = np.array(
+        to_rgba(
+            color_map[substrate]
+        )
+    )
+
+    base_rgba[3] = 1.0
+
+    # ax.plot(
+    #     x,
+    #     y,
+    #     color=base_rgba,
+    #     linestyle=":",
+    #     linewidth=linewidth,
+    #     zorder=zorder
+    # )
+
+
+# =========================================================
+# MAP HELPERS
+# =========================================================
+
+def find_netcdf(base):
+
+    base = Path(base)
+
+    extensions = [
+        "*.nc",
+        "*.nc4",
+        "*.netcdf",
+    ]
+
+    matches = []
+
+    for pattern in extensions:
+
+        matches.extend(
+            base.rglob(pattern)
+        )
+
+    if not matches:
+
+        raise FileNotFoundError(
+            f"No NetCDF file found under:\n{base}"
+        )
+
+    matches = sorted(
+        set(matches)
+    )
+
+    return matches[0]
+
+
+# =========================================================
+# REFERENCE NETCDF
+# =========================================================
+
+reference_suite = (
+    "u-dk105_"
+    + "0"
+    + SELECTED_Q10_CODE
+    + "0"
+    + "0"
+)
+
+reference_file = find_netcdf(
+    directory / reference_suite
+)
+
+
+print()
+print(
+    "Reference NetCDF:"
+)
+
+print(
+    f"  Suite: {reference_suite}"
+)
+
+print(
+    f"  {reference_file}"
+)
+
+
+# =========================================================
+# GET FULL GRID
+# =========================================================
+
+def get_latlon(file_path):
+
+    file_path = str(file_path)
+
+    header = readJULES.read_jules_header(
+        file_path
+    )
+
+    keys = list(header[1])
+
+    lat_k = (
+        "latitude"
+        if "latitude" in keys
+        else "lat"
+    )
+
+    lon_k = (
+        "longitude"
+        if "longitude" in keys
+        else "lon"
+    )
+
+    lats, _, _, _ = readJULES.read_jules_m2(
+        file_path,
+        lat_k
+    )
+
+    lons, _, _, _ = readJULES.read_jules_m2(
+        file_path,
+        lon_k
+    )
+
+    lats = np.asarray(
+        lats,
+        dtype=float
+    ).flatten()
+
+    lons = np.asarray(
+        lons,
+        dtype=float
+    ).flatten()
+
+    lat_u = np.sort(
+        np.unique(lats)
+    )
+
+    lon_u = np.sort(
+        np.unique(lons)
+    )
+
+    if len(lat_u) < 2:
+        raise RuntimeError(
+            "Could not construct latitude grid."
+        )
+
+    if len(lon_u) < 2:
+        raise RuntimeError(
+            "Could not construct longitude grid."
+        )
+
+    dlat = np.median(
+        np.diff(lat_u)
+    )
+
+    dlon = np.median(
+        np.diff(lon_u)
+    )
+
+    lat_grid = np.arange(
+        lat_u.min(),
+        lat_u.max() + dlat * 0.5,
+        dlat
+    )
+
+    lon_grid = np.arange(
+        lon_u.min(),
+        lon_u.max() + dlon * 0.5,
+        dlon
+    )
+
+    return np.meshgrid(
+        lat_grid,
+        lon_grid,
+        indexing="ij"
+    )
+
+
+full_lat2d, full_lon2d = get_latlon(
+    reference_file
+)
+
+
+print()
+print(
+    "Full NetCDF grid:"
+)
+
+print(
+    f"  Shape: {full_lat2d.shape}"
+)
+
+print(
+    f"  Latitude: "
+    f"{full_lat2d.min():.3f} to "
+    f"{full_lat2d.max():.3f}"
+)
+
+print(
+    f"  Original longitude: "
+    f"{full_lon2d.min():.3f} to "
+    f"{full_lon2d.max():.3f}"
+)
+
+
+# =========================================================
+# MAP DIRECTORY
+# =========================================================
+
+def get_map_directory(suite):
+
+    return (
+        directory
+        / suite
+        / "plots"
+        / mode_folder
+        / "output"
+        / scale_folder
+        / variable
+    )
+
+
+# =========================================================
+# FIND ACTUAL MAP FILE
+# =========================================================
+
+def get_map_file(
+    suite,
+    month
+):
+
+    root = get_map_directory(
+        suite
+    )
+
+    if not root.exists():
+
+        raise FileNotFoundError(
+            f"\nMap directory does not exist:\n"
+            f"{root}\n"
+        )
+
+    matches = sorted(
+        root.rglob(
+            f"*{month}_map.txt"
+        )
+    )
+
+    if not matches:
+
+        raise FileNotFoundError(
+            f"\nCould not find a {month} map file.\n"
+            f"Suite: {suite}\n"
+            f"Root : {root}\n"
+        )
+
+    if len(matches) > 1:
+
+        print(
+            f"\nMultiple {month} map files found "
+            f"for {suite}:"
+        )
+
+        for match in matches:
+            print(
+                f"  {match}"
+            )
+
+        print(
+            "Using:"
+        )
+
+        print(
+            f"  {matches[0]}"
+        )
+
+    else:
+
+        print(
+            f"\nFound {month} map:"
+        )
+
+        print(
+            f"  Suite: {suite}"
+        )
+
+        print(
+            f"  File : {matches[0]}"
+        )
+
+    return matches[0]
+
+
+# =========================================================
+# LOAD MAP
+# =========================================================
+
+def load_map(
+    suite,
+    month
+):
+
+    path = get_map_file(
+        suite,
+        month
+    )
+
+    data = np.loadtxt(
+        path
+    )
+
+    data = np.asarray(
+        data,
+        dtype=float
+    )
+
+    if data.ndim != 2:
+
+        raise ValueError(
+            f"Expected a 2-D map from:\n{path}\n"
+            f"Got shape: {data.shape}"
+        )
+
+    print(
+        f"  Map shape: {data.shape}"
+    )
+
+    return data, path
+
+
+# =========================================================
+# CONSTRUCT AND CROP MAP GRID
+# =========================================================
+
+def construct_map_grid(
+    data,
+    full_lat2d,
+    full_lon2d
+):
+
+    nlat_map, nlon_map = data.shape
+
+    nlat_full, nlon_full = full_lat2d.shape
+
+    print(
+        "  Full grid dimensions:",
+        full_lat2d.shape
+    )
+
+    if nlon_map != nlon_full:
+
+        raise ValueError(
+            "\nMAP LONGITUDE DIMENSION MISMATCH\n"
+            f"Map longitude dimension : {nlon_map}\n"
+            f"Full grid longitude dim : {nlon_full}\n"
+        )
+
+    full_lats = np.asarray(
+        full_lat2d[:, 0],
+        dtype=float
+    )
+
+    full_lons = np.asarray(
+        full_lon2d[0, :],
+        dtype=float
+    )
+
+    lat_mask = (
+        (full_lats >= MAP_LAT_MIN)
+        &
+        (full_lats <= MAP_LAT_MAX)
+    )
+
+    matching_rows = np.where(
+        lat_mask
+    )[0]
+
+    if len(matching_rows) == nlat_map:
+
+        row_indices = matching_rows
+
+    else:
+
+        target_centre = (
+            MAP_LAT_MIN
+            + MAP_LAT_MAX
+        ) / 2.0
+
+        candidate_starts = []
+
+        for start in range(
+            0,
+            nlat_full - nlat_map + 1
+        ):
+
+            rows = np.arange(
+                start,
+                start + nlat_map
+            )
+
+            lats = full_lats[rows]
+
+            centre = (
+                lats.min()
+                + lats.max()
+            ) / 2.0
+
+            lower_distance = abs(
+                lats.min()
+                - MAP_LAT_MIN
+            )
+
+            upper_distance = abs(
+                lats.max()
+                - MAP_LAT_MAX
+            )
+
+            centre_distance = abs(
+                centre
+                - target_centre
+            )
+
+            score = (
+                lower_distance
+                + upper_distance
+                + centre_distance
+            )
+
+            candidate_starts.append(
+                (
+                    score,
+                    rows
+                )
+            )
+
+        candidate_starts.sort(
+            key=lambda item: item[0]
+        )
+
+        row_indices = candidate_starts[0][1]
+
+    lat2d_full = full_lat2d[
+        row_indices,
+        :
+    ]
+
+    lon2d_full = full_lon2d[
+        row_indices,
+        :
+    ]
+
+    data_lat = data[
+        :,
+        :
+    ]
+
+    if data_lat.shape[0] != len(row_indices):
+
+        raise ValueError(
+            "\nMAP LATITUDE DIMENSION MISMATCH\n"
+            f"Map latitude dimension : {data_lat.shape[0]}\n"
+            f"Selected grid rows     : {len(row_indices)}\n"
+        )
+
+    lon_plot_1d = (
+        (
+            full_lons
+            + 180.0
+        )
+        % 360.0
+    ) - 180.0
+
+    lon_mask = (
+        (lon_plot_1d >= MAP_LON_MIN - 1e-10)
+        &
+        (lon_plot_1d <= MAP_LON_MAX + 1e-10)
+    )
+
+    lon_indices = np.where(
+        lon_mask
+    )[0]
+
+    if len(lon_indices) == 0:
+
+        raise RuntimeError(
+            "\nNO LONGITUDES FOUND IN REQUESTED RANGE\n"
+            f"Requested: {MAP_LON_MIN} to {MAP_LON_MAX}\n"
+            f"Original longitude: "
+            f"{full_lons.min()} to "
+            f"{full_lons.max()}\n"
+        )
+
+    lon_indices = lon_indices[
+        np.argsort(
+            lon_plot_1d[
+                lon_indices
+            ]
+        )
+    ]
+
+    cropped_lons = lon_plot_1d[
+        lon_indices
+    ]
+
+    cropped_data = data_lat[
+        :,
+        lon_indices
+    ]
+
+    cropped_lat2d = lat2d_full[
+        :,
+        lon_indices
+    ]
+
+    cropped_lon2d = np.broadcast_to(
+        cropped_lons[np.newaxis, :],
+        cropped_lat2d.shape
+    )
+
+    cropped_lon2d = np.asarray(
+        cropped_lon2d
+    )
+
+    if cropped_data.shape != cropped_lat2d.shape:
+
+        raise RuntimeError(
+            "\nFINAL MAP SHAPE MISMATCH\n"
+            f"Data shape : {cropped_data.shape}\n"
+            f"Lat shape  : {cropped_lat2d.shape}\n"
+        )
+
+    if cropped_data.shape != cropped_lon2d.shape:
+
+        raise RuntimeError(
+            "\nFINAL MAP LONGITUDE SHAPE MISMATCH\n"
+            f"Data shape : {cropped_data.shape}\n"
+            f"Lon shape  : {cropped_lon2d.shape}\n"
+        )
+
+    print(
+        "  CROPPED MAP GRID:"
+    )
+
+    print(
+        f"    Shape: {cropped_data.shape}"
+    )
+
+    print(
+        f"    Latitude: "
+        f"{cropped_lat2d.min():.3f} to "
+        f"{cropped_lat2d.max():.3f}"
+    )
+
+    print(
+        f"    Longitude: "
+        f"{cropped_lon2d.min():.3f} to "
+        f"{cropped_lon2d.max():.3f}"
+    )
+
+    print(
+        f"    Longitude columns retained: "
+        f"{len(lon_indices)} / {nlon_map}"
+    )
+
+    if (
+        cropped_lon2d.min() < MAP_LON_MIN - 1e-8
+        or
+        cropped_lon2d.max() > MAP_LON_MAX + 1e-8
+    ):
+
+        raise RuntimeError(
+            "\nLONGITUDE CROPPING FAILED\n"
+            f"Requested: {MAP_LON_MIN} to {MAP_LON_MAX}\n"
+            f"Got: "
+            f"{cropped_lon2d.min()} to "
+            f"{cropped_lon2d.max()}"
+        )
+
+    return (
+        cropped_data,
+        cropped_lat2d,
+        cropped_lon2d
+    )
+
+
+# =========================================================
+# MAP SUITE BUILDER
+# =========================================================
+
+def get_map_suite(
+    panel_key,
+    substrate
+):
+
+    soilmap = panel_key[0]
+    dynamics = panel_key[1]
+
+    return (
+        "u-dk105_"
+        + str(substrate)
+        + SELECTED_Q10_CODE
+        + str(soilmap)
+        + str(dynamics)
+    )
+
+
+# =========================================================
+# LOAD ALL SELECTED MAPS
+# =========================================================
+
+selected_maps = {}
+
+
+for panel_key in PANEL_BASE_SUITES.keys():
+
+    selected_maps[panel_key] = {}
+
+    print()
+    print(
+        "================================================"
+    )
+
+    print(
+        f"Loading maps for panel {panel_key}"
+    )
+
+    print(
+        f"Soil map     : "
+        f"{soil_labels[panel_key[0]]}"
+    )
+
+    print(
+        f"Plant dynamics: "
+        f"{dynamics_labels[panel_key[1]]}"
+    )
+
+    print(
+        "Q10 for all maps: 2.0"
+    )
+
+    print(
+        f"Q10 code: {SELECTED_Q10_CODE}"
+    )
+
+    print(
+        "================================================"
+    )
+
+    for substrate in substrates:
+
+        suite = get_map_suite(
+            panel_key,
+            substrate
+        )
+
+        selected_maps[
+            panel_key
+        ][substrate] = {}
+
+        print()
+        print(
+            f"Substrate: "
+            f"{substrate_labels[substrate]}"
+        )
+
+        print(
+            f"Suite: {suite}"
+        )
+
+        for month in MAP_MONTHS:
+
+            raw_data, path = load_map(
+                suite,
+                month
+            )
+
+            (
+                data,
+                lat2d,
+                lon2d
+            ) = construct_map_grid(
+                raw_data,
+                full_lat2d,
+                full_lon2d
+            )
+
+            selected_maps[
+                panel_key
+            ][substrate][month] = {
+                "data": data,
+                "lat2d": lat2d,
+                "lon2d": lon2d,
+                "path": path,
+                "suite": suite,
+            }
+
+
+# =========================================================
+# ABSOLUTE MAP RGBA
+# =========================================================
+
+def make_absolute_rgba(data):
+
+    norm = mcolors.Normalize(
+        vmin=MAP_VMIN,
+        vmax=MAP_VMAX,
+        clip=False
+    )
+
+    cmap = plt.get_cmap(
+        MAP_CMAP
+    )
+
+    rgba = cmap(
+        norm(data)
+    )
+
+    alpha = norm(data)
+
+    alpha = np.clip(
+        alpha,
+        0.0,
+        1.0
+    )
+
+    alpha = np.nan_to_num(
+        alpha,
+        nan=0.0,
+        posinf=1.0,
+        neginf=0.0
+    )
+
+    rgba[..., -1] = alpha
+
+    return (
+        rgba,
+        norm,
+        cmap
+    )
+
+
+# =========================================================
+# OCEAN COLOUR / Q10 SHADING
+# =========================================================
+
+def add_substrate_q10_ocean(
+    ax,
+    substrate,
+    q10_code=SELECTED_Q10_CODE
+):
+
+    if q10_code not in q10_alpha:
+
+        raise ValueError(
+            f"No Q10 alpha defined for "
+            f"Q10 code {q10_code}"
+        )
+
+    substrate_color = color_map[
+        substrate
+    ]
+
+    alpha = q10_alpha[
+        q10_code
+    ]
+
+    substrate_rgb = np.array(
+        to_rgba(
+            substrate_color
+        )[:3],
+        dtype=float
+    )
+
+    white_rgb = np.ones(
+        3,
+        dtype=float
+    )
+
+    washed_rgb = (
+        alpha * substrate_rgb
+        +
+        (1.0 - alpha) * white_rgb
+    )
+
+    washed_color = (
+        washed_rgb[0],
+        washed_rgb[1],
+        washed_rgb[2],
+        1.0
+    )
+
+    print(
+        f"  Ocean colour: "
+        f"substrate={substrate_labels[substrate]}, "
+        f"Q10={q10_labels[q10_code]}, "
+        f"alpha={alpha:.2f}, "
+        f"RGB="
+        f"({washed_rgb[0]:.3f}, "
+        f"{washed_rgb[1]:.3f}, "
+        f"{washed_rgb[2]:.3f})"
+    )
+
+    ax.add_feature(
+        cfeature.OCEAN,
+        facecolor=washed_color,
+        edgecolor="none",
+        zorder=0,
+        alpha=1.0
+    )
+
+
+# =========================================================
+# MAP UNDERLAY
+# =========================================================
+
+def add_map_underlay(
+    ax,
+    substrate,
+    q10_code=SELECTED_Q10_CODE
+):
+
+    add_substrate_q10_ocean(
+        ax,
+        substrate,
+        q10_code
+    )
+
+    ax.add_feature(
+        cfeature.LAND,
+        facecolor="white",
+        edgecolor="none",
+        zorder=1,
+        alpha=1.0
+    )
+
+
+# =========================================================
+# COLOURED COASTLINE
+# =========================================================
+
+def add_coloured_coastline(
+    ax,
+    substrate
+):
+
+    ax.coastlines(
+        resolution="110m",
+        linewidth=1.0,
+        color=color_map[substrate],
+        zorder=5,
+        alpha=0.8
+    )
+
+
+# =========================================================
+# MAP AXIS CONFIGURATION
+# =========================================================
+
+def configure_map_axis(
+    ax,
+    month,
+    substrate,
+    q10_code=SELECTED_Q10_CODE
+):
+
+    ax.set_extent(
+        [
+            MAP_LON_MIN,
+            MAP_LON_MAX,
+            MAP_LAT_MIN,
+            MAP_LAT_MAX
+        ],
+        crs=ccrs.PlateCarree()
+    )
+
+    try:
+
+        ax.spines["geo"].set_visible(
+            False
+        )
+
+    except KeyError:
+
+        pass
+
+    ax.patch.set_facecolor(
+        "none"
+    )
+
+    ax.patch.set_alpha(
+        0.0
+    )
+
+    ax.patch.set_edgecolor(
+        "none"
+    )
+
+    ax.patch.set_linewidth(
+        0
+    )
+
+    ax.tick_params(
+        axis="y",
+        which="both",
+        left=False,
+        right=False,
+        labelleft=False,
+        labelright=False
+    )
+
+    add_map_underlay(
+        ax,
+        substrate,
+        q10_code
+    )
+
+
+# =========================================================
+# MAP COLORBAR
+# =========================================================
+
+def add_map_colorbar(fig):
+
+    norm = mcolors.Normalize(
+        vmin=MAP_VMIN,
+        vmax=MAP_VMAX
+    )
+
+    cmap = plt.get_cmap(
+        MAP_CMAP
+    )
+
+    N = 256
+
+    values = np.linspace(
+        0.0,
+        1.0,
+        N
+    )
+
+    colors = cmap(
+        values
+    )
+
+    colors[:, -1] = values
+
+    alpha_cmap = mcolors.ListedColormap(
+        colors
+    )
+
+    sm = cm.ScalarMappable(
+        cmap=alpha_cmap,
+        norm=norm
+    )
+
+    sm.set_array([])
+
+    cb_ax = fig.add_axes(
+        [
+            0.93,
+            0.53,
+            0.012,
+            0.15
+        ]
+    )
+
+    cb_ax.set_facecolor(
+        "none"
+    )
+
+    cb = fig.colorbar(
+        sm,
+        cax=cb_ax,
+        orientation="vertical"
+    )
+
+    cb.set_label(
+        variable,
+        fontsize=8
+    )
+
+    cb.ax.tick_params(
+        labelsize=8
+    )
+
+    cb.outline.set_linewidth(
+        0.6
+    )
+
+    return cb
+
+
+# =========================================================
+# MAIN FIGURE LAYOUT
+# =========================================================
+
+fig = plt.figure(
+    figsize=(13, 9.5)
+)
+
+
+# =========================================================
+# OVERALL FIGURE GEOMETRY
+# =========================================================
+
+FIG_LEFT = 0.13
+
+FIG_RIGHT = 0.86
+
+FIG_BOTTOM = 0.08
+FIG_TOP = 0.91
+
+
+# =========================================================
+# RIGHT-HAND LEGEND AREA
+# =========================================================
+
+LEGEND_LEFT = 0.875
+
+LEGEND_RIGHT = 0.94
+
+
+# =========================================================
+# HORIZONTAL GEOMETRY
+# =========================================================
+
+COLUMN_GAP = 0.075
+
+TOTAL_WIDTH = (
+    FIG_RIGHT
+    - FIG_LEFT
+)
+
+PANEL_WIDTH = (
+    TOTAL_WIDTH
+    - COLUMN_GAP
+) / 2.0
+
+
+# =========================================================
+# VERTICAL GEOMETRY
+# =========================================================
+
+ROW_GAP = 0.025
+
+TOTAL_AVAILABLE_HEIGHT = (
+    FIG_TOP
+    - FIG_BOTTOM
+)
+
+ROW_HEIGHT = (
+    TOTAL_AVAILABLE_HEIGHT
+    - ROW_GAP
+) / 2.0
+
+
+# =========================================================
+# PLOT / MAP SIZES
+# =========================================================
+
+PLOT_FRACTION = 0.38
+
+MAP_CLUSTER_FRACTION = 0.57
+
+PLOT_TO_MAP_GAP = 0.004
+
+MAP_TO_Q10_GAP = 0.002
+
+MAP_GAP_Y = 0.001
+
+
+PLOT_HEIGHT = (
+    ROW_HEIGHT
+    * PLOT_FRACTION
+)
+
+MAP_CLUSTER_HEIGHT = (
+    ROW_HEIGHT
+    * MAP_CLUSTER_FRACTION
+)
+
+
+# =========================================================
+# WIDER MAP CLUSTER
+# =========================================================
+
+MAP_CLUSTER_WIDTH_FACTOR = 1.30
+
+
+# =========================================================
+# MAIN PLOT AXES
+# =========================================================
+
+axes = np.empty(
+    (
+        2,
+        2
+    ),
+    dtype=object
+)
+
+
+for row in range(2):
+
+    if row == 0:
+
+        row_bottom = (
+            FIG_BOTTOM
+            + ROW_HEIGHT
+            + ROW_GAP
+        )
+
+    else:
+
+        row_bottom = FIG_BOTTOM
+
+    plot_bottom = (
+        row_bottom
+        + ROW_HEIGHT
+        - PLOT_HEIGHT
+    )
+
+    for col in range(2):
+
+        panel_left = (
+            FIG_LEFT
+            + col
+            * (
+                PANEL_WIDTH
+                + COLUMN_GAP
+            )
+        )
+
+        if row == 0 and col == 0:
+
+            ax = fig.add_axes(
+                [
+                    panel_left,
+                    plot_bottom,
+                    PANEL_WIDTH,
+                    PLOT_HEIGHT
+                ]
+            )
+
+        else:
+
+            ax = fig.add_axes(
+                [
+                    panel_left,
+                    plot_bottom,
+                    PANEL_WIDTH,
+                    PLOT_HEIGHT
+                ],
+                sharex=axes[0, 0],
+                sharey=axes[0, 0]
+            )
+
+        axes[
+            row,
+            col
+        ] = ax
+
+
+# =========================================================
+# CREATE WIDER MAP CLUSTER
+# =========================================================
+
+def add_panel_maps(
+    fig,
+    panel_ax,
+    panel_key,
+    row_bottom
+):
+
+    panel_bbox = panel_ax.get_position()
+
+    panel_left = panel_bbox.x0
+    panel_width = panel_bbox.width
+
+    plot_bottom = panel_bbox.y0 - 0.05
+
+    cluster_top = (
+        plot_bottom
+        - PLOT_TO_MAP_GAP
+    )
+
+    cluster_width = (
+        panel_width
+        * MAP_CLUSTER_WIDTH_FACTOR
+    )
+
+    CLUSTER_SIDE_SHIFT = 0.01
+
+    if panel_left < 0.5:
+
+        cluster_left = (
+            panel_left
+            - (
+                cluster_width
+                - panel_width
+            ) / 2.0
+            - CLUSTER_SIDE_SHIFT
+        )
+
+    else:
+
+        cluster_left = (
+            panel_left
+            - (
+                cluster_width
+                - panel_width
+            ) / 2.0
+            + CLUSTER_SIDE_SHIFT
+        )
+
+    map_width = (
+        cluster_width
+        / 2.0
+    )
+
+    geographic_height_limit = (
+        map_width
+        * 0.31
+    )
+
+    map_height = (
+        geographic_height_limit
+    )
+
+    map_step = (
+        map_height
+        + MAP_GAP_Y
+    )
+
+    cluster_height = (
+        3.0 * map_height
+        + 2.0 * MAP_GAP_Y
+    )
+
+    cluster_bottom = (
+        cluster_top
+        - cluster_height
+    )
+
+    month_positions = {
+        "Mar": 0,
+        "Sep": 1
+    }
+
+    substrate_positions = {
+        "1": 0,
+        "2": 1,
+        "0": 2
+    }
+
+    map_axes = {}
+
+    for substrate in substrates:
+
+        map_axes[substrate] = {}
+
+        map_row = substrate_positions[
+            substrate
+        ]
+
+        for month in MAP_MONTHS:
+
+            col = month_positions[
+                month
+            ]
+
+            left = (
+                cluster_left
+                + col * map_width
+            )
+
+            bottom = (
+                cluster_top
+                - map_height
+                - map_row * map_step
+            )
+
+            map_title = (
+                month
+                if map_row == 0
+                else ""
+            )
+
+            ax = fig.add_axes(
+                [
+                    left,
+                    bottom,
+                    map_width,
+                    map_height
+                ],
+                projection=ccrs.PlateCarree(
+                    central_longitude=0
+                )
+            )
+
+            map_axes[
+                substrate
+            ][month] = ax
+
+            configure_map_axis(
+                ax,
+                map_title,
+                substrate,
+                SELECTED_Q10_CODE
+            )
+
+            map_info = selected_maps[
+                panel_key
+            ][substrate][month]
+
+            data = map_info[
+                "data"
+            ]
+
+            lat2d = map_info[
+                "lat2d"
+            ]
+
+            lon2d = map_info[
+                "lon2d"
+            ]
+
+            rgba, _, _ = make_absolute_rgba(
+                data
+            )
+
+            if (
+                lon2d.min()
+                < MAP_LON_MIN - 1e-8
+                or
+                lon2d.max()
+                > MAP_LON_MAX + 1e-8
+            ):
+
+                raise RuntimeError(
+                    "\nMAP DATA PASSED TO PCOLORMESH "
+                    "OUTSIDE REQUESTED LONGITUDE RANGE\n"
+                    f"Longitude received: "
+                    f"{lon2d.min()} to {lon2d.max()}\n"
+                    f"Required: "
+                    f"{MAP_LON_MIN} to {MAP_LON_MAX}"
+                )
+
+            ax.pcolormesh(
+                lon2d,
+                lat2d,
+                rgba,
+                shading="auto",
+                transform=ccrs.PlateCarree(),
+                linewidth=0,
+                edgecolors="none",
+                antialiased=False,
+                zorder=2
+            )
+
+            add_coloured_coastline(
+                ax,
+                substrate
+            )
+
+    # =====================================================
+    # BLACK RECTANGLES AROUND MAP CLUSTERS
+    # =====================================================
+
+    MAP_BOX_LINEWIDTH = 0.8
+
+    MAP_BOX_PAD = 0.0025
+
+    for month in MAP_MONTHS:
+
+        month_axes = [
+            map_axes[substrate][month]
+            for substrate in substrates
+        ]
+
+        positions = [
+            ax.get_position()
+            for ax in month_axes
+        ]
+
+        left = min(
+            pos.x0
+            for pos in positions
+        )
+
+        right = max(
+            pos.x1
+            for pos in positions
+        )
+
+        bottom = min(
+            pos.y0
+            for pos in positions
+        )
+
+        top = max(
+            pos.y1
+            for pos in positions
+        )
+
+        rect = Rectangle(
+            (
+                left - MAP_BOX_PAD,
+                bottom - MAP_BOX_PAD
+            ),
+            (
+                right
+                - left
+                + 2 * MAP_BOX_PAD
+            ),
+            (
+                top
+                - bottom
+                + 2 * MAP_BOX_PAD
+            ),
+            transform=fig.transFigure,
+            facecolor="none",
+            edgecolor="black",
+            linewidth=MAP_BOX_LINEWIDTH,
+            zorder=1000,
+            clip_on=False
+        )
+
+        fig.add_artist(
+            rect
+        )
+
+    return map_axes
+
+
+# =========================================================
+# PLOT EACH MAIN PANEL
+# =========================================================
+
+soilmaps = [
+    "0",
+    "1"
+]
+
+dynamics_modes = [
+    "0",
+    "1"
+]
+
+
+q10_plot_data = {}
+
+
+for row, soilmap in enumerate(
+    soilmaps
+):
+
+    if row == 0:
+
+        row_bottom = (
+            FIG_BOTTOM
+            + ROW_HEIGHT
+            + ROW_GAP
+        )
+
+    else:
+
+        row_bottom = FIG_BOTTOM
+
+    for col, dynamics in enumerate(
+        dynamics_modes
+    ):
+
+        ax = axes[
+            row,
+            col
+        ]
+
+        ax.spines[
+            "top"
+        ].set_visible(False)
+
+        ax.spines[
+            "right"
+        ].set_visible(False)
+
+        ax.spines[
+            "bottom"
+        ].set_visible(False)
+
+        ax.spines[
+            "left"
+        ].set_visible(False)
+
+        ax.set_facecolor(
+            panel_background
+        )
+
+        ax.patch.set_alpha(
+            0.75
+        )
+
+        ax.set_ylim(
+            plot_y_min,
+            plot_y_max
+        )
+
+        panel_data = [
+            item
+            for item in loaded_data
+            if item[3] == soilmap
+            and item[4] == dynamics
+        ]
+
+        selected_suite = PANEL_BASE_SUITES[
+            (
+                soilmap,
+                dynamics
+            )
+        ]
+
+        print()
+        print(
+            f"Panel: "
+            f"{soil_labels[soilmap]} / "
+            f"{dynamics_labels[dynamics]}"
+        )
+
+        print(
+            f"  Base suite  : {selected_suite}"
+        )
+
+        print(
+            "  Number of series:",
+            len(panel_data)
+        )
+
+        ax.fill_between(
+            master_x,
+            master_lower,
+            master_upper,
+            color=ensemble_fill_color,
+            alpha=1.0,
+            linewidth=0,
+            edgecolor="none",
+            zorder=0
+        )
+
+        ax.plot(
+            master_x,
+            master_upper,
+            color="black",
+            linestyle="--",
+            linewidth=0.9,
+            alpha=0.9,
+            zorder=3
+        )
+
+        ax.plot(
+            master_x,
+            master_lower,
+            color="black",
+            linestyle="--",
+            linewidth=0.9,
+            alpha=0.9,
+            zorder=3
+        )
+
+        data = {}
+
+        for (
+            name,
+            substrate,
+            q10,
+            soilmap_code,
+            dynamics_code,
+            filepath,
+            y
+        ) in panel_data:
+
+            substrate = str(
+                substrate
+            )
+
+            q10 = str(
+                q10
+            )
+
+            if substrate not in data:
+
+                data[substrate] = {}
+
+            data[
+                substrate
+            ][q10] = y
+
+        x = np.arange(
+            series_length
+        )
+
+        q10_plot_data[
+            (soilmap, dynamics)
+        ] = {}
+
+        for substrate in substrates:
+
+            if substrate not in data:
+                continue
+
+            q10_data = data[
+                substrate
+            ]
+
+            available_q10 = sorted(
+                q10_data.keys(),
+                key=lambda q: int(q)
+            )
+
+            if len(available_q10) < 2:
+                continue
+
+            missing_alpha = [
+                q
+                for q in available_q10
+                if q not in q10_alpha
+            ]
+
+            if missing_alpha:
+
+                raise RuntimeError(
+                    f"Missing Q10 alpha values "
+                    f"for substrate {substrate}: "
+                    f"{missing_alpha}"
+                )
+
+            plot_smooth_q10_band(
+                ax=ax,
+                x=x,
+                q10_data=q10_data,
+                color=color_map[substrate],
+                alpha_map=q10_alpha,
+                y_axis_min=plot_y_min,
+                y_axis_max=plot_y_max,
+                zorder=1
+            )
+
+            q10_target = (
+                SELECTED_Q10_CODE
+            )
+
+            if q10_target not in q10_data:
+
+                print(
+                    f"WARNING: Q10 code "
+                    f"{q10_target} not found for "
+                    f"substrate {substrate} in "
+                    f"panel "
+                    f"{soil_labels[soilmap]} / "
+                    f"{dynamics_labels[dynamics]}"
+                )
+
+            else:
+
+                plot_q10_line(
+                    ax=ax,
+                    x=x,
+                    y=q10_data[
+                        q10_target
+                    ],
+                    substrate=substrate,
+                    q10_code=SELECTED_Q10_CODE,
+                    linewidth=1.3,
+                    zorder=4
+                )
+
+                q10_plot_data[
+                    (soilmap, dynamics)
+                ][substrate] = q10_data[
+                    q10_target
+                ]
+
+        # =================================================
+        # NORMAL GRIDLINES
+        # =================================================
+        #
+        # All gridlines are initially gray.
+        # March and September are overwritten below in
+        # black.
+        # =================================================
+
+        ax.grid(
+            alpha=0.35,
+            linewidth=0.8,
+            color="gray",
+            zorder=2
+        )
+
+
+# =========================================================
+# BLACK VERTICAL GRIDLINES AT MARCH AND SEPTEMBER
+# =========================================================
+#
+# IMPORTANT:
+#
+# Your monthly x positions are:
+#
+# Jan = 0
+# Feb = 1
+# Mar = 2
+# ...
+# Sep = 8
+#
+# Therefore the vertical gridlines corresponding to
+# March and September are x = 2 and x = 8.
+#
+# These are drawn explicitly AFTER the normal gray grid,
+# so they appear black and sit above the other gridlines.
+# =========================================================
+
+MARCH_INDEX = 2
+SEPTEMBER_INDEX = 8
+
+SPECIAL_GRIDLINE_COLOR = "black"
+SPECIAL_GRIDLINE_LINEWIDTH = 1.2
+SPECIAL_GRIDLINE_ALPHA = 0.3
+SPECIAL_GRIDLINE_ZORDER = 10
+
+
+for ax in axes.flat:
+
+    ax.axvline(
+        MARCH_INDEX,
+        color=SPECIAL_GRIDLINE_COLOR,
+        linewidth=SPECIAL_GRIDLINE_LINEWIDTH,
+        alpha=SPECIAL_GRIDLINE_ALPHA,
+        linestyle="-",
+        zorder=SPECIAL_GRIDLINE_ZORDER
+    )
+
+    ax.axvline(
+        SEPTEMBER_INDEX,
+        color=SPECIAL_GRIDLINE_COLOR,
+        linewidth=SPECIAL_GRIDLINE_LINEWIDTH,
+        alpha=SPECIAL_GRIDLINE_ALPHA,
+        linestyle="-",
+        zorder=SPECIAL_GRIDLINE_ZORDER
+    )
+
+
+# =========================================================
+# Q10 = 2 SQUARE PLOT SYMBOLS ON MARCH AND SEPTEMBER
+# =========================================================
+
+Q10_MARKER_SIZE = 5
+Q10_MARKER_LINEWIDTH = 0.9
+
+march_index = 2
+september_index = 8
+
+for row, soilmap in enumerate(soilmaps):
+
+    for col, dynamics in enumerate(dynamics_modes):
+
+        ax = axes[row, col]
+
+        panel_key = (soilmap, dynamics)
+
+        panel_q10_data = q10_plot_data.get(
+            panel_key,
+            {}
+        )
+
+        for substrate in substrates:
+
+            if substrate not in panel_q10_data:
+                continue
+
+            y = panel_q10_data[substrate]
+
+            for index in (
+                march_index,
+                september_index
+            ):
+
+                if index < len(y):
+
+                    y_value = y[index]
+
+                    if np.isfinite(y_value):
+
+                        ax.plot(
+                            index,
+                            y_value,
+                            marker="o",
+                            markersize=Q10_MARKER_SIZE,
+                            markerfacecolor="white",
+                            markeredgecolor="black",
+                            markeredgewidth=Q10_MARKER_LINEWIDTH,
+                            linestyle="none",
+                            zorder=20,
+                            clip_on=False,
+                        )
+
+
+
+# =========================================================
+# COLUMN HEADERS
+# =========================================================
+
+for col, dynamics in enumerate(
+    dynamics_modes
+):
+
+    axes[
+        0,
+        col
+    ].set_title(
+        dynamics_labels[dynamics],
+        pad=24,
+        fontsize=14,
+        fontweight="normal",
+        fontstyle="italic"
+    )
+
+
+# =========================================================
+# PLANT DYNAMICS MASTER LABEL
+# =========================================================
+
+fig.text(
+    0.495,
+    0.95,
+    "Plant Dynamics",
+    ha="center",
+    va="center",
+    fontsize=17,
+    fontstyle="italic"
+)
+
+
+# =========================================================
+# ROW LABELS
+# =========================================================
+
+for row, soilmap in enumerate(
+    soilmaps
+):
+
+    axes[
+        row,
+        0
+    ].annotate(
+        soil_labels[soilmap],
+        xy=(-0.28, -0.2),
+        xycoords="axes fraction",
+        rotation=90,
+        ha="right",
+        va="center",
+        fontsize=14,
+        fontweight="normal",
+        fontstyle="italic"
+    )
+
+
+# =========================================================
+# SOIL MAP MASTER LABEL
+# =========================================================
+
+fig.text(
+    0.03,
+    0.52,
+    "Soil Map",
+    ha="center",
+    va="center",
+    rotation=90,
+    fontsize=17,
+    fontstyle="italic"
+)
+
+
+# =========================================================
+# X AXIS
+# =========================================================
+
+if series_length == 12:
+
+    for ax in axes.flat:
+
+        ax.set_xticks(
+            range(12)
+        )
+
+        ax.set_xticklabels(
+            months
+        )
+
+
+# =========================================================
+# Y AXIS
+# =========================================================
+
+axes[
+    0,
+    0
+].set_ylabel(
+    "f$_{CH4}$",
+    fontsize=16
+)
+
+axes[
+    1,
+    0
+].set_ylabel(
+    "f$_{CH4}$",
+    fontsize=16
+)
+
+axes[
+    0,
+    0
+].yaxis.labelpad = 12
+
+axes[
+    1,
+    0
+].yaxis.labelpad = 12
+
+
+# =========================================================
+# OVERALL TITLE
+# =========================================================
+
+# fig.text(
+#     0.055,
+#     0.985,
+#     mode_folder.capitalize()
+#     + r" Mean f$_{CH4}$ - "
+#     + scale_folder.capitalize(),
+#     ha="left",
+#     va="center",
+#     fontsize=16,
+#     fontweight="bold"
+# )
+
+
+# =========================================================
+# FULL ENSEMBLE LEGEND
+# =========================================================
+
+ensemble_patch = Patch(
+    facecolor="white",
+    edgecolor="black",
+    linestyle="--",
+    linewidth=0.9,
+    label="Full ensemble",
+)
+
+
+ensemble_legend = fig.legend(
+    handles=[
+        ensemble_patch
+    ],
+    loc="upper left",
+    bbox_to_anchor=(
+        0.87,
+        0.93
+    ),
+    bbox_transform=fig.transFigure,
+    frameon=False,
+    fontsize=10,
+    borderpad=0.0,
+    handlelength=1.8,
+    handleheight=0.8,
+    handletextpad=0.6
+)
+
+
+# =========================================================
+# THREE SUBSTRATE Q10 COLORBARS
+# =========================================================
+
+def create_substrate_q10_colorbar(
+    fig,
+    substrate,
+    left,
+    bottom,
+    width,
+    height,
+    show_q10_labels=False
+):
+
+    base_rgb = np.array(
+        to_rgba(
+            color_map[substrate]
+        )[:3]
+    )
+
+    q10_positions = np.array(
+        [
+            1.0,
+            2.0,
+            3.0,
+            4.0
+        ]
+    )
+
+    q10_alpha_values = np.array(
+        [
+            q10_alpha["0"],
+            q10_alpha["1"],
+            q10_alpha["2"],
+            q10_alpha["3"]
+        ]
+    )
+
+    n = 256
+
+    q10_dense = np.linspace(
+        1.0,
+        4.0,
+        n
+    )
+
+    alpha_dense = np.interp(
+        q10_dense,
+        q10_positions,
+        q10_alpha_values
+    )
+
+    rgba_table = np.zeros(
+        (
+            n,
+            4
+        )
+    )
+
+    rgba_table[:, 0] = base_rgb[0]
+    rgba_table[:, 1] = base_rgb[1]
+    rgba_table[:, 2] = base_rgb[2]
+    rgba_table[:, 3] = alpha_dense
+
+    cmap = LinearSegmentedColormap.from_list(
+        f"q10_{substrate}",
+        rgba_table
+    )
+
+    norm = Normalize(
+        vmin=1.0,
+        vmax=4.0
+    )
+
+    mappable = ScalarMappable(
+        norm=norm,
+        cmap=cmap
+    )
+
+    mappable.set_array(
+        np.array(
+            [
+                1.0,
+                4.0
+            ]
+        )
+    )
+
+    cax = fig.add_axes(
+        [
+            left,
+            bottom,
+            width,
+            height
+        ]
+    )
+
+    cbar = fig.colorbar(
+        mappable,
+        cax=cax,
+        orientation="vertical"
+    )
+
+    cbar.set_ticks(
+        [
+            1.0,
+            2.0,
+            3.0,
+            4.0
+        ]
+    )
+
+    if show_q10_labels:
+
+        cbar.set_ticklabels(
+            [
+                "1.0",
+                "2.0",
+                "3.0",
+                "4.0"
+            ]
+        )
+
+        cbar.ax.tick_params(
+            axis="y",
+            which="both",
+            length=3,
+            width=0.7,
+            labelsize=8,
+            pad=2
+        )
+
+    else:
+
+        cbar.ax.set_yticklabels([])
+
+        cbar.ax.tick_params(
+            axis="y",
+            which="both",
+            length=0
+        )
+
+    cbar.outline.set_linewidth(
+        0.5
+    )
+
+    cbar.ax.set_xlabel(
+        substrate_labels[substrate],
+        fontsize=10,
+        labelpad=8,
+        rotation=45
+    )
+
+    cbar.ax.set_ylabel(
+        "Q10",
+        fontsize=9,
+        labelpad=4
+    )
+
+    # =====================================================
+    # BLACK X MARKER AT Q10 = 2.0
+    # =====================================================
+
+    Q10_MARKER = 2.0
+
+    cbar.ax.plot(
+        0.5,
+        Q10_MARKER,
+        marker="o",
+        markersize=5,
+        markeredgecolor="black",
+        markeredgewidth=1.2,
+        linestyle="none",
+        transform=cbar.ax.get_yaxis_transform(),
+        clip_on=False,
+        zorder=20,
+        color='white'
+    )
+
+    return cbar
+
+
+
+# =========================================================
+# Q10 COLORBARS
+# =========================================================
+
+colorbar_bottom = 0.805
+
+colorbar_height = 0.075
+
+colorbar_width = 0.012
+
+colorbar_spacing = 0.009
+
+q10_left = 0.9
+
+
+create_substrate_q10_colorbar(
+    fig=fig,
+    substrate="0",
+    left=q10_left,
+    bottom=colorbar_bottom,
+    width=colorbar_width,
+    height=colorbar_height,
+    show_q10_labels=False
+)
+
+
+create_substrate_q10_colorbar(
+    fig=fig,
+    substrate="1",
+    left=(
+        q10_left
+        + colorbar_width
+        + colorbar_spacing
+    ),
+    bottom=colorbar_bottom,
+    width=colorbar_width,
+    height=colorbar_height,
+    show_q10_labels=False
+)
+
+
+create_substrate_q10_colorbar(
+    fig=fig,
+    substrate="2",
+    left=(
+        q10_left
+        + 2 * (
+            colorbar_width
+            + colorbar_spacing
+        )
+    ),
+    bottom=colorbar_bottom,
+    width=colorbar_width,
+    height=colorbar_height,
+    show_q10_labels=True
+)
+
+
+# =========================================================
+# ADD MAP CLUSTERS
+# =========================================================
+
+map_axes = {}
+
+
+for row, soilmap in enumerate(
+    soilmaps
+):
+
+    if row == 0:
+
+        row_bottom = (
+            FIG_BOTTOM
+            + ROW_HEIGHT
+            + ROW_GAP
+        )
+
+    else:
+
+        row_bottom = FIG_BOTTOM
+
+    for col, dynamics in enumerate(
+        dynamics_modes
+    ):
+
+        panel_key = (
+            soilmap,
+            dynamics
+        )
+
+        panel_ax = axes[
+            row,
+            col
+        ]
+
+        map_axes[
+            panel_key
+        ] = add_panel_maps(
+            fig,
+            panel_ax,
+            panel_key,
+            row_bottom
+        )
+
+
+# =========================================================
+# MAP COLORBAR
+# =========================================================
+
+add_map_colorbar(
+    fig
+)
+
+
+# =========================================================
+# SAVE
+# =========================================================
+
+output_directory = (
+    directory
+    / scale_folder
+)
+
+
+output_directory.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+
+output_file = (
+    output_directory
+    / (
+        "monthly_mean_soilmap_plantmode_2x2_"
+        "substrate_ensemble_filled_with_"
+        "Mar_Sep_maps_Q10_2_2x3.png"
+    )
+)
+
+
+fig.savefig(
+    output_file,
+    dpi=300,
+    bbox_inches="tight",
+    pad_inches=0.04,
+    facecolor="white"
+)
+
+
+print()
+print(
+    "==============================================="
+)
+
+print(
+    "Saved:"
+)
+
+print(
+    output_file
+)
+
+print(
+    "==============================================="
+)
+
+
+# =========================================================
+# SHOW
+# =========================================================
+
+plt.show()

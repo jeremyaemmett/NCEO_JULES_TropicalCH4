@@ -24,8 +24,8 @@ base_path = Path(
 variable = "fch4_wetl"
 
 suites = [
-    "u-dk105_000",
-    "u-dk105_010",
+    "u-dk105_0000",
+    "u-dk105_0100",
 ]
 
 months = [
@@ -457,6 +457,8 @@ fig.patch.set_facecolor(
     "white"
 )
 
+plt.show()
+
 
 # =========================================================
 # SAVE
@@ -466,8 +468,10 @@ output_file = (
     Path(
         "/Users/jae35/Desktop/JULES_test_data"
     )
-    / "differences3_new.png"
+    / "differences3_new2.png"
 )
+
+stop
 
 plt.savefig(
     output_file,

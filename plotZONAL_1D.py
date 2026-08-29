@@ -52,10 +52,16 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
     lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, lat_string)
     lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, lon_string)
 
-    #coords_are_2d = len(np.shape(lats)) == 2
-    #if coords_are_2d: lats, lons = lats[:, 0], lons[0, :]
+    # The JULES coordinates are serialized, so work with unique latitude bands.
+    lats_unique_full = np.sort(np.unique(lats.flatten()))
 
-    lat_spacing = np.diff(np.unique(lats))[0]
+    # Latitude array used by make_maps when latitude_bounds='36'.
+    lats_unique_restricted = lats_unique_full[
+        (lats_unique_full >= -36.0) &
+        (lats_unique_full <= 36.0)
+    ]
+
+    lat_spacing = np.median(np.diff(lats_unique_full))
 
     for unique_end_directory in unique_end_directories:
         #print(unique_end_directory)
@@ -93,7 +99,7 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
 
         is_rate = dataOPS.check_if_rate(k_unit)
 
-        zonal_values = np.loadtxt(zonal_file).T  # shape (100, 12)
+        zonal_values = np.loadtxt(zonal_file).T
         zonal_values_trimmed = np.copy(zonal_values)
         #zonal_values_trimmed[zonal_values_trimmed < 0.01] = np.nan
 
@@ -110,12 +116,41 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
         else:
             raise ValueError(f"Unexpected shape: {integ_values.shape}")
 
-        # Assuming lats is your latitude array with length 100
-        #print(lats)
-        #print(np.unique(lats))
-        X, Y = np.meshgrid(np.arange(12), np.unique(lats))  # shape (100, 12)
-        #print(X)
-        #print(Y)
+        # ------------------------------------------------------------
+        # Determine which latitude array belongs to this zonal file.
+        #
+        # Unscaled maps contain the full latitude range.
+        # Scaled maps contain only -36 to +36.
+        # ------------------------------------------------------------
+
+        num_zonal_lats = zonal_values.shape[0]
+
+        if num_zonal_lats == len(lats_unique_full):
+
+            lats_plot = lats_unique_full
+
+        elif num_zonal_lats == len(lats_unique_restricted):
+
+            lats_plot = lats_unique_restricted
+
+        else:
+
+            raise ValueError(
+                f"Latitude mismatch: zonal_values has {num_zonal_lats} "
+                f"latitude points, but the full latitude array has "
+                f"{len(lats_unique_full)} points and the -36/+36 array has "
+                f"{len(lats_unique_restricted)} points."
+            )
+
+        #print('Using latitude array:', lats_plot)
+        #print('Number of latitude bands:', len(lats_plot))
+        #print('zonal_values shape:', zonal_values.shape)
+
+        # X and Y must have the same first two dimensions as the data.
+        X, Y = np.meshgrid(
+            np.arange(zonal_values_trimmed.shape[1]),
+            lats_plot
+        )
 
         if is_rate:
             fig, axs = plt.subplots(2, 2, figsize=(17.50, 9.00), gridspec_kw={'width_ratios': [2, 1]})
@@ -133,9 +168,6 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
 
         rgba_colors = rgba_cmap(norm(zonal_values_trimmed))
         rgba_colors[..., -1] = norm(zonal_values_trimmed)  # alpha proportional to value
-
-        #X, Y = np.meshgrid(np.arange(zonal_values_trimmed.shape[1]),
-        #                np.unique(lats))
 
         c = ax1.pcolormesh(X, Y, rgba_colors, shading='auto')
         land_color = "#f5e6c8"  # your land color
@@ -157,8 +189,8 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
         ax1.set_xticks(np.arange(zonal_values.shape[1]))
         ax1.set_xticklabels(months, fontsize=20)
 
-        ymin = 5 * (lats.min() // 5)
-        ymax = 5 * ((lats.max() + 4) // 5)  # ensures ceiling to next multiple of 5
+        ymin = 5 * (lats_plot.min() // 5)
+        ymax = 5 * ((lats_plot.max() + 4) // 5)  # ensures ceiling to next multiple of 5
         #yticks = range(int(ymin), int(ymax)+1, 10)
         yticks = np.arange(-90, 91, 30)   # or -90 to 91 if global
         ax1.set_ylim(ymin, ymax)
@@ -190,12 +222,11 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
 
         ###
 
-
         for i in range(num_layers):
             rect = Rectangle(
                 (i - 0.5, -0.18),   # start at left edge of each month bin
                 1.0,                # width = one month
-                0.155,               # height of strip
+                0.155,              # height of strip
                 transform=ax1.get_xaxis_transform(),  # x=data, y=axes
                 color=cmap(i),
                 alpha=0.45,
@@ -227,10 +258,6 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
         cb.set_label(' \n' + dataOPS.cleanup_exponents(k_unit) + '\n', fontsize=22)
         cb.ax.set_title(" ", fontsize=22)  
         cb.ax.tick_params(labelsize=22)
-        #for i in range(1, zonal_values.shape[1]):
-        #    if (i)%3 == 0:
-        #        ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
-        #        ax1.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
 
         ax_areal_mean = ax1.twinx()
         ax_areal_mean.plot(areal_values, linewidth=6.0, color='white')
@@ -244,7 +271,7 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
         #ax2.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
         ax2.set_title(r"$\mathbf{Sliced\ means}$" + "\n" + "by month (color)", loc='left', fontsize=30)
         ax2.set_xlabel(dataOPS.cleanup_exponents(k_unit), fontsize=20)
-        ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
+        ax2.set_ylim([np.nanmin(lats_plot), np.nanmax(lats_plot)])
         ax2.tick_params(axis='both', which='major', labelsize=20)
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
@@ -258,7 +285,7 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
 
         # Fill between subsequent layers
         for i in range(0, num_layers):
-            ax2.plot(zonal_values[:, i], np.unique(lats), color=cmap(i), label=f"Layer {i}", linewidth=4.0, alpha=0.45)
+            ax2.plot(zonal_values[:, i], lats_plot, color=cmap(i), label=f"Layer {i}", linewidth=4.0, alpha=0.45)
 
 
         if is_rate:
@@ -273,7 +300,7 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
             rgba_colors[..., -1] = norm(integ_values_cumsum)  # alpha proportional to value
 
             X, Y = np.meshgrid(np.arange(integ_values_cumsum.shape[1]),
-                            np.unique(lats))
+                            lats_plot)
 
             c = ax3.pcolormesh(X, Y, rgba_colors, shading='auto')
 
@@ -296,7 +323,7 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
                 rect = Rectangle(
                     (i - 0.5, -0.18),  # align with tick
                     1.0,               # width = 1 month
-                    0.155,              # height of strip
+                    0.155,             # height of strip
                     transform=ax3.get_xaxis_transform(),
                     color=cmap(i),
                     alpha=0.45,
@@ -325,8 +352,8 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
             ax3.spines['top'].set_visible(False)
             ax3.spines['right'].set_visible(False)
 
-            ymin = 5 * (lats.min() // 5)
-            ymax = 5 * ((lats.max() + 4) // 5)  # ensures ceiling to next multiple of 5
+            ymin = 5 * (lats_plot.min() // 5)
+            ymax = 5 * ((lats_plot.max() + 4) // 5)  # ensures ceiling to next multiple of 5
             #yticks = range(int(ymin), int(ymax)+1, 10)
             yticks = np.arange(-90, 91, 30)   # or -90 to 91 if global
             ax3.set_ylim(ymin, ymax)
@@ -364,29 +391,72 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
             cb.ax.set_title(" ", fontsize=22)  
             cb.ax.tick_params(labelsize=22)
             cb.ax.yaxis.get_offset_text().set_fontsize(14)
-            #for i in range(1, zonal_values.shape[1]):
-            #    if (i)%3 == 0:
-            #        ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='black', linewidth=4.0)
-            #        ax3.plot([i-0.5, i-0.5], [np.nanmin(lats), np.nanmax(lats)], linestyle='-', color='white', linewidth=2.0)
+
+            #ax_zonal_intg = ax3.twinx()
+            #ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=6.0, color='white')
+            #ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=4.0, color='black')
+            #ax_zonal_intg.tick_params(direction='in', labelsize=24)
+            #ax_zonal_intg.yaxis.get_offset_text().set_fontsize(24)
+            #print('year-end cumulative (Tg): ', np.nansum(integ_values_cumsum, axis=0)[-1] / 1e9)
 
             ax_zonal_intg = ax3.twinx()
-            ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=6.0, color='white')
-            ax_zonal_intg.plot(np.nansum(integ_values_cumsum, axis=0), linewidth=4.0, color='black')
+
+            regions = {
+                'Global': np.ones(len(lats_plot), dtype=bool),
+                'Tropical': (lats_plot >= -36) & (lats_plot <= 36),
+                'Extratropical': (lats_plot < -36) | (lats_plot > 36)
+            }
+
+            region_colors = {
+                'Global': 'black',
+                'Tropical': 'red',
+                'Extratropical': 'blue'
+            }
+
+            for name, mask in regions.items():
+                if not np.any(mask):
+                    continue
+
+                curve = 1e-9 * np.nansum(integ_values_cumsum[mask, :], axis=0)
+
+                ax_zonal_intg.plot(curve, linewidth=6, color='white', zorder=20)
+                ax_zonal_intg.plot(
+                    curve, linewidth=4,
+                    color=region_colors[name],
+                    label=name,
+                    zorder=21
+                )
+
+                txt = ax_zonal_intg.text(
+                    len(curve) - 0.8, curve[-1],
+                    f'{curve[-1]:.2f}',
+                    color=region_colors[name],
+                    fontsize=20,
+                    fontweight='bold',
+                    va='center'
+                )
+                txt.set_path_effects([
+                    pe.Stroke(linewidth=4, foreground='white'),
+                    pe.Normal()
+                ])
+
+                print(f'{name} year-end cumulative (Tg): {curve[-1]:.6g}')
+
             ax_zonal_intg.tick_params(direction='in', labelsize=24)
             ax_zonal_intg.yaxis.get_offset_text().set_fontsize(24)
-            print('year-end cumulative (Tg): ', np.nansum(integ_values_cumsum, axis=0)[-1] / 1e9)
+            ax_zonal_intg.legend(fontsize=16, frameon=False)
+
 
             plot_title = "Collapsed cumulative"
             #ax4.set_title(plot_title, loc='left', fontsize=16, fontstyle='italic')
             ax4.set_title(r"$\mathbf{Stacked\ cumulative}$" + "\n" + "by month (color)", loc='left', fontsize=30)
             #ax4.set_xlabel(dataOPS.cleanup_exponents(k_unit.replace("m-2", "")), fontsize=18)
             ax4.set_xlabel(dataOPS.cleanup_exponents("kg"), fontsize=18)
-            ax4.set_ylim([np.nanmin(lats), np.nanmax(lats)])
+            ax4.set_ylim([np.nanmin(lats_plot), np.nanmax(lats_plot)])
             ax4.tick_params(axis='both', which='major', labelsize=20)
             ax4.spines['top'].set_visible(False)
             ax4.spines['right'].set_visible(False)
             ax4.set_facecolor('none')
-            #ax4.patch.set_alpha(0)
 
             # cumulative sum along columns
             cumulative = 1e-9 * np.cumsum(integ_values, axis=1)  # shape: (lat, num_curves)
@@ -397,21 +467,18 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
             cmap = cm.get_cmap('rainbow', num_layers)
 
             # First fill: from zero to first layer
-            ax4.fill_betweenx(np.unique(lats), 0, cumulative[:, 0], color=cmap(0), label="Layer 0", alpha=0.45)
+            ax4.fill_betweenx(lats_plot, 0, cumulative[:, 0], color=cmap(0), label="Layer 0", alpha=0.45)
 
             # Fill between subsequent layers
             for i in range(1, num_layers):
                 lower = cumulative[:, i - 1]
                 upper = cumulative[:, i]
-                ax4.fill_betweenx(np.unique(lats), lower, upper, color=cmap(i), label=f"Layer {i}", alpha=0.45)
-                #if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='black', linestyle='-', linewidth = 3.0)
-                #if (i+1)%3 == 0 and i != num_layers-1: ax4.plot(upper, lats, color='white', linestyle='-', linewidth = 1.0)
-                #if i == 5: ax2.plot(upper, lats, color='gray', linestyle='-', linewidth = 2.0)
+                ax4.fill_betweenx(lats_plot, lower, upper, color=cmap(i), label=f"Layer {i}", alpha=0.45)
 
         #legend_handles = [Patch(facecolor=cmap(i), label=months[i]) for i in range(num_layers)]
-        #ax2.legend(handles=legend_handles, title=" ", loc='upper left', fontsize=14, title_fontsize=16, ncol=1, borderaxespad=0, bbox_to_anchor=(1.05, 1), frameon=False)
+        #ax2.legend(handles=legend_handles, title=" ", loc='upper left', fontsize=14, title_fontsize=16, ncol=1, borderaxespad=0, bbox_to_anchor=(1.05, 1), frameon=False, columnspacing=2.0)
 
-        ax2.set_ylim([np.nanmin(lats), np.nanmax(lats)])
+        ax2.set_ylim([np.nanmin(lats_plot), np.nanmax(lats_plot)])
         ax2.tick_params(axis='both', which='major', labelsize=20)
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
@@ -421,7 +488,7 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
         #ax2.set_yticks([])
 
         # ... same for ax4
-        ax4.set_ylim([np.nanmin(lats), np.nanmax(lats)])
+        ax4.set_ylim([np.nanmin(lats_plot), np.nanmax(lats_plot)])
         ax4.tick_params(axis='both', which='major', labelsize=20)
         ax4.spines['top'].set_visible(False)
         ax4.spines['right'].set_visible(False)
@@ -432,8 +499,6 @@ def make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False):
 
         plt.tight_layout()
         #plt.show()
-
-        #fig.patch.set_alpha(0)  # figure background transparent
 
         plt.savefig(unique_end_directory + '/' + 'complete_zonalmeans.png', dpi=300, bbox_inches='tight')
         plt.close()

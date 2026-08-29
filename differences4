@@ -1,0 +1,1868 @@
+from pathlib import Path
+import os
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+
+import dataOPS
+import readJULES
+
+
+# =========================================================
+# CONFIG
+# =========================================================
+
+mode = "both"
+
+# Choose:
+#   "global"
+#   "band"
+domain = "global"
+
+# Choose:
+#   "scaled"
+#   "unscaled"
+scale_type = "scaled"
+
+base_path = Path(
+    "/Users/jae35/Desktop/JULES_test_data/test"
+)
+
+variable = "fch4_wetl"
+
+suites = [
+    "u-dk105_0200",
+    "u-dk105_1200",
+]
+
+months = [
+    "Mar",
+    "Jun",
+    "Sep",
+    "Dec",
+]
+
+
+# =========================================================
+# MAP EXTENT
+# =========================================================
+
+LAT_MIN = -40
+LAT_MAX = 40
+
+LON_MIN = -180
+LON_MAX = 180
+
+
+# =========================================================
+# FIGURE GEOMETRY
+# =========================================================
+
+FIGSIZE = (10, 2.9)
+
+SUBPLOT_ADJUST = {
+    "left": 0.025,
+    "right": 0.88,
+    "bottom": -0.025,
+    "top": 0.955,
+    "wspace": 0.050,
+    "hspace": -0.350,
+}
+
+
+# =========================================================
+# SHARED COLORBAR POSITION
+# =========================================================
+
+COLORBAR_POS = [
+    0.91,
+    0.25,
+    0.015,
+    0.50,
+]
+
+
+# =========================================================
+# ABSOLUTE COLOR SETTINGS
+# =========================================================
+
+ABSOLUTE_CMAP = "gist_ncar"
+ABSOLUTE_CMAP = 'jet'
+
+ABSOLUTE_VMIN = 0.0
+ABSOLUTE_VMAX = 0.25
+
+
+# =========================================================
+# DIFFERENCE COLOR SETTINGS
+# =========================================================
+
+# Do NOT use "seismic" here.
+#
+# "seismic" has white at zero, which produces the unwanted
+# white band when the RGBA values are composited over the
+# beige land underlay.
+#
+# Instead:
+#
+#   negative -> blue
+#   zero     -> beige
+#   positive -> red
+#
+# The zero colour exactly matches the land underlay.
+
+DIFFERENCE_CMAP = mcolors.LinearSegmentedColormap.from_list(
+    "difference_blue_beige_red",
+    [
+        (0.00, "#2166ac"),
+        (0.20, "#4393c3"),
+        (0.40, "#92c5de"),
+        (0.49, "#d9e8f5"),
+        (0.50, "#f5e6c8"),
+        (0.51, "#fddbc7"),
+        (0.60, "#f4a582"),
+        (0.80, "#d6604d"),
+        (1.00, "#b2182b"),
+    ],
+)
+
+
+# =========================================================
+# DIFFERENCE ALPHA SETTINGS
+# =========================================================
+
+DIFFERENCE_ALPHA_MAX = 1.0
+
+# 0.5 gives a smooth increase in visibility away from zero.
+#
+# Zero difference:
+#     alpha = 0
+#
+# Maximum difference:
+#     alpha = 1
+
+DIFFERENCE_ALPHA_POWER = 0.3
+
+
+# =========================================================
+# VALIDATE CONFIG
+# =========================================================
+
+if mode not in [
+    "absolute",
+    "difference",
+    "both",
+]:
+    raise ValueError(
+        f"Unknown mode: {mode!r}. "
+        "Use 'absolute', 'difference', or 'both'."
+    )
+
+
+if domain not in [
+    "global",
+    "band",
+]:
+    raise ValueError(
+        f"Unknown domain: {domain!r}. "
+        "Use 'global' or 'band'."
+    )
+
+
+if scale_type not in [
+    "scaled",
+    "unscaled",
+]:
+    raise ValueError(
+        f"Unknown scale_type: {scale_type!r}. "
+        "Use 'scaled' or 'unscaled'."
+    )
+
+
+if len(suites) != 2:
+    raise ValueError(
+        "Exactly two suites are required for this script."
+    )
+
+
+# =========================================================
+# SUITE CODE DECODING
+# =========================================================
+
+SUBSTRATE_LABELS = {
+    "0": "Carbon",
+    "1": "NPP",
+    "2": "Resps",
+}
+
+
+Q10_LABELS = {
+    "0": "1.0",
+    "1": "2.0",
+    "2": "3.0",
+    "3": "4.0",
+}
+
+
+SOIL_LABELS = {
+    "0": "Standard",
+    "1": "Oxi + Ulti",
+}
+
+
+DYNAMICS_LABELS = {
+    "0": "Competitive",
+    "1": "Non-competitive",
+}
+
+
+def decode_suite(suite):
+    """
+    Decode a JULES suite name into the four experimental
+    parameter categories encoded by its four-digit suffix.
+    """
+
+    suite = str(suite)
+
+    if "_" not in suite:
+        raise ValueError(
+            f"Cannot decode suite {suite!r}: "
+            "expected a four-digit suffix after '_'."
+        )
+
+    code = suite.split("_")[-1]
+
+    if len(code) != 4 or not code.isdigit():
+        raise ValueError(
+            f"Cannot decode suite {suite!r}: "
+            f"suffix {code!r} is not four digits."
+        )
+
+    substrate_code = code[0]
+    q10_code = code[1]
+    soil_code = code[2]
+    dynamics_code = code[3]
+
+    if substrate_code not in SUBSTRATE_LABELS:
+        raise ValueError(
+            f"Unknown substrate code {substrate_code!r} "
+            f"in suite {suite!r}."
+        )
+
+    if q10_code not in Q10_LABELS:
+        raise ValueError(
+            f"Unknown Q10 code {q10_code!r} "
+            f"in suite {suite!r}."
+        )
+
+    if soil_code not in SOIL_LABELS:
+        raise ValueError(
+            f"Unknown soil-map code {soil_code!r} "
+            f"in suite {suite!r}."
+        )
+
+    if dynamics_code not in DYNAMICS_LABELS:
+        raise ValueError(
+            f"Unknown dynamics code {dynamics_code!r} "
+            f"in suite {suite!r}."
+        )
+
+    return {
+        "suite": suite,
+        "code": code,
+        "substrate_code": substrate_code,
+        "q10_code": q10_code,
+        "soil_code": soil_code,
+        "dynamics_code": dynamics_code,
+        "substrate": SUBSTRATE_LABELS[
+            substrate_code
+        ],
+        "q10": Q10_LABELS[
+            q10_code
+        ],
+        "soil": SOIL_LABELS[
+            soil_code
+        ],
+        "dynamics": DYNAMICS_LABELS[
+            dynamics_code
+        ],
+    }
+
+
+def suite_description(suite):
+    """
+    Return a concise human-readable description of a suite.
+    """
+
+    info = decode_suite(suite)
+
+    return (
+        f"{info['substrate']} | "
+        f"Q10 = {info['q10']} | "
+        f"{info['soil']} | "
+        f"{info['dynamics']}"
+    )
+
+
+def suite_title(suite):
+    """
+    Return the overall figure title for one suite.
+    """
+
+    return suite_description(suite)
+
+
+def difference_title(
+    suite_a,
+    suite_b,
+):
+    """
+    Return a human-readable description of the difference
+    between two encoded suites.
+    """
+
+    description_a = suite_description(
+        suite_a
+    )
+
+    description_b = suite_description(
+        suite_b
+    )
+
+    return (
+        f"{description_a}  −  {description_b}"
+    )
+
+
+# =========================================================
+# PRINT DECODED SUITES
+# =========================================================
+
+print()
+print(
+    "========================================================"
+)
+print(
+    "DECODED SUITES"
+)
+print(
+    "========================================================"
+)
+
+for suite in suites:
+
+    info = decode_suite(
+        suite
+    )
+
+    print(
+        f"{suite}:"
+    )
+
+    print(
+        f"  Code       = {info['code']}"
+    )
+
+    print(
+        f"  Substrate  = {info['substrate']}"
+    )
+
+    print(
+        f"  Q10        = {info['q10']}"
+    )
+
+    print(
+        f"  Soil map   = {info['soil']}"
+    )
+
+    print(
+        f"  Plants     = {info['dynamics']}"
+    )
+
+    print(
+        f"  Title      = {suite_title(suite)}"
+    )
+
+print(
+    "========================================================"
+)
+print()
+
+
+# =========================================================
+# HELPERS
+# =========================================================
+
+def find_file(base, suffix):
+    """
+    Find the first file below 'base' ending with 'suffix'.
+    """
+
+    base = Path(base)
+
+    matches = list(
+        base.rglob(
+            f"*{suffix}"
+        )
+    )
+
+    if not matches:
+        raise FileNotFoundError(
+            f"\nNo file matching '*{suffix}' found under:\n"
+            f"{base}\n"
+        )
+
+    return matches[0]
+
+
+def find_netcdf(base):
+    """
+    Find a NetCDF file below 'base'.
+    """
+
+    base = Path(base)
+
+    extensions = [
+        "*.nc",
+        "*.nc4",
+        "*.netcdf",
+    ]
+
+    matches = []
+
+    for pattern in extensions:
+
+        matches.extend(
+            base.rglob(
+                pattern
+            )
+        )
+
+    if not matches:
+        raise FileNotFoundError(
+            "\nNo NetCDF file was found under:\n"
+            f"{base}\n\n"
+            "A NetCDF/JULES file is needed for reading the "
+            "variable unit and latitude/longitude."
+        )
+
+    matches = sorted(
+        set(matches)
+    )
+
+    print(
+        "\nNetCDF files found:"
+    )
+
+    for f in matches:
+
+        print(
+            f"  {f}"
+        )
+
+    print(
+        f"\nUsing NetCDF reference file:\n"
+        f"  {matches[0]}\n"
+    )
+
+    return matches[0]
+
+
+# =========================================================
+# GRID
+# =========================================================
+
+def get_latlon(file_path):
+    """
+    Read latitude and longitude from a JULES NetCDF file
+    and construct regular 2D latitude/longitude grids.
+    """
+
+    file_path = str(
+        file_path
+    )
+
+    header = readJULES.read_jules_header(
+        file_path
+    )
+
+    keys = list(
+        header[1]
+    )
+
+    lat_k = (
+        "latitude"
+        if "latitude" in keys
+        else "lat"
+    )
+
+    lon_k = (
+        "longitude"
+        if "longitude" in keys
+        else "lon"
+    )
+
+    lats, _, _, _ = readJULES.read_jules_m2(
+        file_path,
+        lat_k
+    )
+
+    lons, _, _, _ = readJULES.read_jules_m2(
+        file_path,
+        lon_k
+    )
+
+    lats = lats.flatten()
+    lons = lons.flatten()
+
+    lat_u = np.sort(
+        np.unique(
+            lats
+        )
+    )
+
+    lon_u = np.sort(
+        np.unique(
+            lons
+        )
+    )
+
+    dlat = np.median(
+        np.diff(
+            lat_u
+        )
+    )
+
+    dlon = np.median(
+        np.diff(
+            lon_u
+        )
+    )
+
+    lat_grid = np.arange(
+        lat_u.min(),
+        lat_u.max() + dlat / 2,
+        dlat
+    )
+
+    lon_grid = np.arange(
+        lon_u.min(),
+        lon_u.max() + dlon / 2,
+        dlon
+    )
+
+    return np.meshgrid(
+        lat_grid,
+        lon_grid,
+        indexing="ij"
+    )
+
+
+# =========================================================
+# MAP DIRECTORY
+# =========================================================
+
+def get_map_directory(suite):
+    """
+    Directory containing the seasonal *_map.txt files.
+    """
+
+    return (
+        base_path
+        / suite
+        / "plots"
+        / domain
+        / "output"
+        / scale_type
+        / variable
+    )
+
+
+def get_map_file(suite, month):
+    """
+    Return the *_map.txt file for a given suite and month.
+    """
+
+    directory = get_map_directory(
+        suite
+    )
+
+    return find_file(
+        directory,
+        f"{month}_map.txt"
+    )
+
+
+# =========================================================
+# LOAD ONE MAP
+# =========================================================
+
+def load_map(
+    suite,
+    month,
+    lat2d,
+):
+    """
+    Load a seasonal map from text.
+    """
+
+    path = get_map_file(
+        suite,
+        month
+    )
+
+    print(
+        f"Reading {month} / {suite}: {path}"
+    )
+
+    data = np.loadtxt(
+        path
+    )
+
+    if data.shape != lat2d.shape:
+
+        raise ValueError(
+            f"\nShape mismatch for:\n"
+            f"{path}\n"
+            f"Map data shape : {data.shape}\n"
+            f"Grid shape     : {lat2d.shape}\n"
+        )
+
+    return data
+
+
+# =========================================================
+# MAP UNDERLAY
+# =========================================================
+
+def add_map_underlay(ax):
+    """
+    Add the map background.
+
+    There are deliberately NO country borders here.
+    """
+
+    ax.add_feature(
+        cfeature.LAND,
+        facecolor="#f5e6c8",
+        edgecolor="none",
+        zorder=1,
+        alpha=1.0,
+    )
+
+    ax.add_feature(
+        cfeature.OCEAN,
+        facecolor="#a6cee3",
+        edgecolor="none",
+        zorder=1,
+        alpha=0.5,
+    )
+
+    ax.add_feature(
+        cfeature.LAKES,
+        facecolor="#a6cee3",
+        edgecolor="none",
+        zorder=1,
+        alpha=0.5,
+    )
+
+
+# =========================================================
+# FINAL OCEAN
+# =========================================================
+
+def add_final_ocean(ax):
+    """
+    Draw the final opaque ocean layer.
+    """
+
+    ax.add_feature(
+        cfeature.OCEAN,
+        facecolor="#bcd9e9",
+        edgecolor="none",
+        zorder=4,
+        alpha=1.0,
+    )
+
+
+# =========================================================
+# COASTLINE
+# =========================================================
+
+def add_coastline(ax):
+    """
+    Draw coastline only.
+    """
+
+    ax.coastlines(
+        resolution="110m",
+        linewidth=0.6,
+        zorder=5,
+        alpha=0.5
+    )
+
+
+# =========================================================
+# CREATE FIGURE
+# =========================================================
+
+def create_panel_figure():
+    """
+    Create the common 2x2 figure geometry.
+    """
+
+    fig, axes = plt.subplots(
+        2,
+        2,
+        figsize=FIGSIZE,
+        subplot_kw={
+            "projection": ccrs.PlateCarree(
+                central_longitude=25
+            )
+        },
+        squeeze=False,
+    )
+
+    fig.subplots_adjust(
+        **SUBPLOT_ADJUST
+    )
+
+    fig.patch.set_facecolor(
+        "white"
+    )
+
+    return fig, axes
+
+
+# =========================================================
+# CONFIGURE MAP AXIS
+# =========================================================
+
+def configure_map_axis(
+    ax,
+    month,
+):
+    """
+    Configure one seasonal map axis.
+    """
+
+    ax.set_title(
+        month,
+        fontsize=11,
+        fontstyle="italic",
+        pad=8,
+        alpha=0.7,
+        x=0.07, y=0.29,
+        zorder = 5
+    )
+
+    ax.set_extent(
+        [
+            LON_MIN,
+            LON_MAX,
+            LAT_MIN,
+            LAT_MAX,
+        ],
+        crs=ccrs.PlateCarree(),
+    )
+
+    try:
+        ax.spines["geo"].set_visible(
+            False
+        )
+    except KeyError:
+        pass
+
+    ax.patch.set_edgecolor(
+        "none"
+    )
+
+    ax.patch.set_linewidth(
+        0
+    )
+
+    add_map_underlay(
+        ax
+    )
+
+
+# =========================================================
+# ABSOLUTE RGBA CREATION
+# =========================================================
+
+def make_absolute_rgba(
+    data,
+    variable_name,
+    variable_global_min,
+    variable_global_max,
+    cmap_name,
+):
+    """
+    Create RGBA data for absolute mode.
+
+    Colour:
+        inferno
+
+    Alpha:
+        normalised data value
+    """
+
+    vmin = variable_global_min
+    vmax = variable_global_max
+
+    if variable_name == "fch4_wetl":
+
+        vmin = ABSOLUTE_VMIN
+        vmax = ABSOLUTE_VMAX
+
+    norm = mcolors.Normalize(
+        vmin=vmin,
+        vmax=vmax,
+        clip=False,
+    )
+
+    cmap = plt.get_cmap(
+        cmap_name
+    )
+
+    rgba = cmap(
+        norm(data)
+    )
+
+    alpha = norm(
+        data
+    )
+
+    alpha = np.clip(
+        alpha,
+        0.0,
+        1.0,
+    )
+
+    alpha = np.nan_to_num(
+        alpha,
+        nan=0.0,
+        posinf=1.0,
+        neginf=0.0,
+    )
+
+    rgba[..., -1] = alpha
+
+    return (
+        rgba,
+        norm,
+        cmap,
+    )
+
+
+# =========================================================
+# DIFFERENCE RGBA CREATION
+# =========================================================
+
+def make_difference_rgba(
+    data,
+    abs_max,
+    cmap,
+):
+    """
+    Create RGBA data for difference mode.
+
+    Negative differences:
+        blue
+
+    Zero:
+        beige / transparent
+
+    Positive differences:
+        red
+
+    The same normalisation and alpha function are used
+    by the difference colourbar.
+    """
+
+    norm = mcolors.Normalize(
+        vmin=-abs_max,
+        vmax=abs_max,
+        clip=True,
+    )
+
+    # -----------------------------------------------------
+    # Map difference to colour.
+    # -----------------------------------------------------
+
+    rgba = cmap(
+        norm(data)
+    )
+
+    # -----------------------------------------------------
+    # Alpha based on absolute difference.
+    #
+    # Zero:
+    #     completely transparent
+    #
+    # Maximum:
+    #     completely opaque
+    # -----------------------------------------------------
+
+    alpha = (
+        np.abs(data)
+        / abs_max
+    )
+
+    alpha = np.clip(
+        alpha,
+        0.0,
+        1.0,
+    )
+
+    alpha = (
+        alpha
+        ** DIFFERENCE_ALPHA_POWER
+    )
+
+    alpha = np.nan_to_num(
+        alpha,
+        nan=0.0,
+        posinf=1.0,
+        neginf=0.0,
+    )
+
+    rgba[..., -1] = alpha
+
+    return (
+        rgba,
+        norm,
+        cmap,
+    )
+
+
+# =========================================================
+# ABSOLUTE COLORBAR
+# =========================================================
+
+def add_absolute_colorbar(
+    fig,
+    variable_name,
+    variable_unit,
+    variable_global_min,
+    variable_global_max,
+):
+    """
+    Add the absolute-mode vertical colourbar.
+    """
+
+    vmin = variable_global_min
+    vmax = variable_global_max
+
+    if variable_name == "fch4_wetl":
+
+        vmin = ABSOLUTE_VMIN
+        vmax = ABSOLUTE_VMAX
+
+    norm = mcolors.Normalize(
+        vmin=vmin,
+        vmax=vmax,
+    )
+
+    rgba_cmap = plt.get_cmap(
+        ABSOLUTE_CMAP
+    )
+
+    N = 256
+
+    values = np.linspace(
+        0.0,
+        1.0,
+        N,
+    )
+
+    colors = rgba_cmap(
+        values
+    )
+
+    colors[:, -1] = values
+
+    alpha_cmap = mcolors.ListedColormap(
+        colors
+    )
+
+    sm = cm.ScalarMappable(
+        cmap=alpha_cmap,
+        norm=norm,
+    )
+
+    sm.set_array(
+        []
+    )
+
+    cb_ax = fig.add_axes(
+        COLORBAR_POS
+    )
+
+    cb_ax.add_patch(
+        plt.Rectangle(
+            (0, 0),
+            1,
+            1,
+            transform=cb_ax.transAxes,
+            facecolor="#f5e6c8",
+            edgecolor="none",
+            zorder=0,
+            alpha=1.0,
+        )
+    )
+
+    cb = fig.colorbar(
+        sm,
+        cax=cb_ax,
+        orientation="vertical",
+    )
+
+    cb.set_label(
+        dataOPS.cleanup_exponents(
+            variable_unit
+        ),
+        fontsize=11,
+    )
+
+    cb.ax.tick_params(
+        labelsize=10
+    )
+
+    GRAY = "black"
+    ALPHA = 0.8
+
+    cb.outline.set_edgecolor(
+        GRAY
+    )
+
+    cb.outline.set_alpha(
+        ALPHA
+    )
+
+    cb.outline.set_linewidth(
+        0.8
+    )
+
+    cb.ax.tick_params(
+        color=GRAY,
+        labelcolor=GRAY,
+        labelsize=10,
+        width=0.8,
+    )
+
+    for tick_label in cb.ax.get_yticklabels():
+
+        tick_label.set_alpha(
+            ALPHA
+        )
+
+    cb.ax.yaxis.label.set_color(
+        GRAY
+    )
+
+    cb.ax.yaxis.label.set_alpha(
+        ALPHA
+    )
+
+    return cb
+
+
+# =========================================================
+# DIFFERENCE COLORBAR
+# =========================================================
+
+def add_difference_colorbar(
+    fig,
+    variable_unit,
+    abs_max,
+):
+    """
+    Add the difference colourbar.
+
+    This uses exactly the same custom colormap,
+    normalisation and alpha function as the difference map.
+    """
+
+    norm = mcolors.Normalize(
+        vmin=-abs_max,
+        vmax=abs_max,
+        clip=True,
+    )
+
+    cmap = DIFFERENCE_CMAP
+
+    # -----------------------------------------------------
+    # Build colourbar values.
+    # -----------------------------------------------------
+
+    N = 256
+
+    values = np.linspace(
+        -1.0,
+        1.0,
+        N,
+    )
+
+    cmap_values = (
+        values + 1.0
+    ) / 2.0
+
+    colors = cmap(
+        cmap_values
+    )
+
+    # -----------------------------------------------------
+    # Same alpha function as the map.
+    # -----------------------------------------------------
+
+    alpha = np.abs(
+        values
+    )
+
+    alpha = np.clip(
+        alpha,
+        0.0,
+        1.0,
+    )
+
+    alpha = (
+        alpha
+        ** DIFFERENCE_ALPHA_POWER
+    )
+
+    colors[:, -1] = alpha
+
+    alpha_cmap = mcolors.ListedColormap(
+        colors
+    )
+
+    sm = cm.ScalarMappable(
+        cmap=alpha_cmap,
+        norm=norm,
+    )
+
+    sm.set_array(
+        []
+    )
+
+    # -----------------------------------------------------
+    # Colourbar axis.
+    # -----------------------------------------------------
+
+    cb_ax = fig.add_axes(
+        COLORBAR_POS
+    )
+
+    cb_ax.set_facecolor(
+        "#f5e6c8"
+    )
+
+    cb = fig.colorbar(
+        sm,
+        cax=cb_ax,
+        orientation="vertical",
+    )
+
+    cb.set_label(
+        dataOPS.cleanup_exponents(
+            variable_unit
+        ),
+        fontsize=11,
+    )
+
+    cb.ax.tick_params(
+        labelsize=10
+    )
+
+    GRAY = "black"
+    ALPHA = 0.8
+
+    cb.outline.set_edgecolor(
+        GRAY
+    )
+
+    cb.outline.set_alpha(
+        ALPHA
+    )
+
+    cb.outline.set_linewidth(
+        0.8
+    )
+
+    cb.ax.tick_params(
+        color=GRAY,
+        labelcolor=GRAY,
+        labelsize=10,
+        width=0.8,
+    )
+
+    for tick_label in cb.ax.get_yticklabels():
+
+        tick_label.set_alpha(
+            ALPHA
+        )
+
+    cb.ax.yaxis.label.set_color(
+        GRAY
+    )
+
+    cb.ax.yaxis.label.set_alpha(
+        ALPHA
+    )
+
+    return cb
+
+
+# =========================================================
+# MAKE ABSOLUTE PANEL
+# =========================================================
+
+def make_absolute_panel(
+    suite,
+    lat2d,
+    lon2d,
+    variable_unit,
+    variable_global_min,
+    variable_global_max,
+):
+    """
+    Make one complete absolute seasonal panel.
+    """
+
+    print(
+        "\n"
+        + "=" * 60
+    )
+
+    print(
+        "ABSOLUTE PANEL"
+    )
+
+    print(
+        f"Suite code: {decode_suite(suite)['code']}"
+    )
+
+    print(
+        f"Configuration: {suite_title(suite)}"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    fig, axes = create_panel_figure()
+
+    positions = {
+        "Mar": (0, 0),
+        "Jun": (0, 1),
+        "Sep": (1, 0),
+        "Dec": (1, 1),
+    }
+
+    for month in months:
+
+        row, col = positions[
+            month
+        ]
+
+        ax = axes[
+            row,
+            col
+        ]
+
+        configure_map_axis(
+            ax,
+            month,
+        )
+
+        data = load_map(
+            suite,
+            month,
+            lat2d,
+        )
+
+        rgba, _, _ = make_absolute_rgba(
+            data,
+            variable,
+            variable_global_min,
+            variable_global_max,
+            ABSOLUTE_CMAP,
+        )
+
+        ax.pcolormesh(
+            lon2d,
+            lat2d,
+            rgba,
+            shading="auto",
+            transform=ccrs.PlateCarree(),
+            linewidth=0,
+            edgecolors="none",
+            antialiased=False,
+            zorder=2,
+        )
+
+        add_final_ocean(
+            ax
+        )
+
+        add_coastline(
+            ax
+        )
+
+    # =====================================================
+    # OVERALL FIGURE TITLE
+    # =====================================================
+
+    fig.text(
+        0.025,
+        0.985,
+        suite_title(suite),
+        ha="left",
+        va="top",
+        fontsize=13,
+        fontweight="bold",
+    )
+
+    # =====================================================
+    # COLORBAR
+    # =====================================================
+
+    add_absolute_colorbar(
+        fig,
+        variable,
+        variable_unit,
+        variable_global_min,
+        variable_global_max,
+    )
+
+    # =====================================================
+    # OUTPUT
+    # =====================================================
+
+    output_file = (
+        base_path
+        / (
+            f"{suite}_"
+            f"{variable}_"
+            f"seasonal_panel.png"
+        )
+    )
+
+    fig.savefig(
+        output_file,
+        dpi=300,
+        bbox_inches="tight",
+        facecolor="white",
+    )
+
+    print(
+        f"\nSaved absolute panel:\n"
+        f"{output_file}\n"
+    )
+
+    return fig
+
+
+# =========================================================
+# MAKE DIFFERENCE PANEL
+# =========================================================
+
+def make_difference_panel(
+    lat2d,
+    lon2d,
+    variable_unit,
+    difference_data,
+):
+    """
+    Make the difference seasonal panel.
+
+    Difference is:
+
+        suites[0] - suites[1]
+
+    Scale is fixed at +/- 0.25.
+    """
+
+    print(
+        "\n"
+        + "=" * 60
+    )
+
+    print(
+        "DIFFERENCE PANEL"
+    )
+
+    print(
+        f"{suites[0]} - {suites[1]}"
+    )
+
+    print(
+        f"{suite_description(suites[0])}"
+    )
+
+    print(
+        "minus"
+    )
+
+    print(
+        f"{suite_description(suites[1])}"
+    )
+
+    print(
+        "=" * 60
+    )
+
+    # =====================================================
+    # FIXED GLOBAL DIFFERENCE SCALE
+    # =====================================================
+
+    abs_max = 0.25
+
+    if not np.isfinite(
+        abs_max
+    ):
+
+        raise ValueError(
+            "No finite difference data were found."
+        )
+
+    if abs_max == 0:
+
+        raise ValueError(
+            "All difference data are zero. "
+            "A non-zero colour scale is required."
+        )
+
+    print(
+        "\nDifference colour scale:"
+    )
+
+    print(
+        f"  Minimum = {-abs_max}"
+    )
+
+    print(
+        f"  Maximum = {abs_max}"
+    )
+
+    print(
+        "\nDifference alpha settings:"
+    )
+
+    print(
+        f"  Alpha max   = "
+        f"{DIFFERENCE_ALPHA_MAX}"
+    )
+
+    print(
+        f"  Alpha power = "
+        f"{DIFFERENCE_ALPHA_POWER}"
+    )
+
+    # =====================================================
+    # FIGURE
+    # =====================================================
+
+    fig, axes = create_panel_figure()
+
+    positions = {
+        "Mar": (0, 0),
+        "Jun": (0, 1),
+        "Sep": (1, 0),
+        "Dec": (1, 1),
+    }
+
+    for m, month in enumerate(
+        months
+    ):
+
+        row, col = positions[
+            month
+        ]
+
+        ax = axes[
+            row,
+            col
+        ]
+
+        configure_map_axis(
+            ax,
+            month,
+        )
+
+        data = difference_data[
+            m
+        ]
+
+        # -------------------------------------------------
+        # Create RGBA.
+        # -------------------------------------------------
+
+        rgba, _, _ = make_difference_rgba(
+            data,
+            abs_max,
+            DIFFERENCE_CMAP,
+        )
+
+        # -------------------------------------------------
+        # Plot.
+        # -------------------------------------------------
+
+        ax.pcolormesh(
+            lon2d,
+            lat2d,
+            rgba,
+            shading="auto",
+            transform=ccrs.PlateCarree(),
+            linewidth=0,
+            edgecolors="none",
+            antialiased=False,
+            zorder=2,
+        )
+
+        # -------------------------------------------------
+        # Final ocean.
+        # -------------------------------------------------
+
+        add_final_ocean(
+            ax
+        )
+
+        # -------------------------------------------------
+        # Coastline.
+        # -------------------------------------------------
+
+        add_coastline(
+            ax
+        )
+
+    # =====================================================
+    # OVERALL FIGURE TITLE
+    # =====================================================
+
+    fig.text(
+        0.025,
+        0.985,
+        difference_title(
+            suites[0],
+            suites[1],
+        ),
+        ha="left",
+        va="top",
+        fontsize=11.5,
+        fontweight="bold",
+    )
+
+    # =====================================================
+    # DIFFERENCE COLORBAR
+    # =====================================================
+
+    add_difference_colorbar(
+        fig,
+        variable_unit,
+        abs_max,
+    )
+
+    # =====================================================
+    # OUTPUT
+    # =====================================================
+
+    output_file = (
+        Path(
+            "/Users/jae35/Desktop/JULES_test_data"
+        )
+        / (
+            f"differences3_"
+            f"{domain}_"
+            f"{scale_type}_"
+            f"lat{LAT_MIN}_{LAT_MAX}.png"
+        )
+    )
+
+    fig.savefig(
+        output_file,
+        dpi=300,
+        bbox_inches="tight",
+        facecolor="white",
+    )
+
+    print(
+        f"\nSaved difference panel:\n"
+        f"{output_file}\n"
+    )
+
+    return fig
+
+
+# =========================================================
+# REFERENCE NETCDF
+# =========================================================
+
+reference_directory = (
+    base_path
+    / suites[0]
+)
+
+reference_file = find_netcdf(
+    reference_directory
+)
+
+
+# =========================================================
+# VARIABLE INFORMATION
+# =========================================================
+
+_, variable_unit, _, _ = readJULES.read_jules_m2(
+    str(reference_file),
+    variable
+)
+
+print(
+    f"Variable : {variable}"
+)
+
+print(
+    f"Unit     : {variable_unit}"
+)
+
+
+# =========================================================
+# GRID
+# =========================================================
+
+lat2d, lon2d = get_latlon(
+    reference_file
+)
+
+print(
+    "\nGrid shape:"
+)
+
+print(
+    f"  {lat2d.shape}"
+)
+
+print(
+    f"Latitude range: "
+    f"{lat2d.min():.3f} to "
+    f"{lat2d.max():.3f}"
+)
+
+print(
+    f"Longitude range: "
+    f"{lon2d.min():.3f} to "
+    f"{lon2d.max():.3f}"
+)
+
+
+# =========================================================
+# READ ALL ABSOLUTE DATA
+# =========================================================
+
+absolute_data = {}
+
+for suite in suites:
+
+    absolute_data[suite] = []
+
+    for month in months:
+
+        data = load_map(
+            suite,
+            month,
+            lat2d,
+        )
+
+        absolute_data[
+            suite
+        ].append(
+            data
+        )
+
+    absolute_data[
+        suite
+    ] = np.stack(
+        absolute_data[
+            suite
+        ],
+        axis=0
+    )
+
+
+# =========================================================
+# ABSOLUTE GLOBAL COLOR SCALE
+# =========================================================
+
+absolute_values = []
+
+for suite in suites:
+
+    data = absolute_data[
+        suite
+    ]
+
+    finite = data[
+        np.isfinite(
+            data
+        )
+    ]
+
+    if finite.size:
+
+        absolute_values.append(
+            finite
+        )
+
+
+if not absolute_values:
+
+    raise ValueError(
+        "No finite absolute data were found."
+    )
+
+
+absolute_values = np.concatenate(
+    absolute_values
+)
+
+variable_global_min = np.nanmin(
+    absolute_values
+)
+
+variable_global_max = np.nanmax(
+    absolute_values
+)
+
+print(
+    "\nAbsolute global colour scale:"
+)
+
+print(
+    f"  Minimum = "
+    f"{variable_global_min}"
+)
+
+print(
+    f"  Maximum = "
+    f"{variable_global_max}"
+)
+
+
+# =========================================================
+# CALCULATE DIFFERENCES
+# =========================================================
+
+difference_data = (
+    absolute_data[suites[0]]
+    - absolute_data[suites[1]]
+)
+
+
+# =========================================================
+# CREATE FIGURES
+# =========================================================
+
+figures = []
+
+
+# =========================================================
+# ABSOLUTE WINDOW 1
+# =========================================================
+
+if mode in [
+    "absolute",
+    "both",
+]:
+
+    fig_absolute_1 = make_absolute_panel(
+        suites[0],
+        lat2d,
+        lon2d,
+        variable_unit,
+        variable_global_min,
+        variable_global_max,
+    )
+
+    figures.append(
+        fig_absolute_1
+    )
+
+
+# =========================================================
+# ABSOLUTE WINDOW 2
+# =========================================================
+
+if mode in [
+    "absolute",
+    "both",
+]:
+
+    fig_absolute_2 = make_absolute_panel(
+        suites[1],
+        lat2d,
+        lon2d,
+        variable_unit,
+        variable_global_min,
+        variable_global_max,
+    )
+
+    figures.append(
+        fig_absolute_2
+    )
+
+
+# =========================================================
+# DIFFERENCE WINDOW
+# =========================================================
+
+if mode in [
+    "difference",
+    "both",
+]:
+
+    fig_difference = make_difference_panel(
+        lat2d,
+        lon2d,
+        variable_unit,
+        difference_data,
+    )
+
+    figures.append(
+        fig_difference
+    )
+
+
+# =========================================================
+# SHOW ALL WINDOWS
+# =========================================================
+
+print(
+    "\n"
+    + "=" * 60
+)
+
+print(
+    f"Displaying {len(figures)} figure window(s)."
+)
+
+print(
+    "=" * 60
+)
+
+plt.show()
+
+
+# =========================================================
+# CLOSE ALL FIGURES AFTER DISPLAY
+# =========================================================
+
+for fig in figures:
+
+    plt.close(
+        fig
+    )
