@@ -9,7 +9,9 @@ import numpy as np
 import plotTSERIES
 import plotPARAMS
 import plotMAPS_1D
+import plotMAPS_1D_2
 import plotZONAL_1D
+import plotZONAL_1D_2
 import plotZONAL
 import plotMAPS
 import sysOPS
@@ -28,34 +30,34 @@ def process_workflow(data_path, file_name, year):
     outp_path = data_path + 'plots/global/'
     print(' ')
     print('     Making scaled maps...')
-    plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=True, latitude_bounds=None)
+    plotMAPS_1D_2.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=True, latitude_bounds=None)
     print(' ')
     print('     Making scaled zonal plots...')
-    plotZONAL_1D.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=True)
+    plotZONAL_1D_2.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=True)
 
     outp_path = data_path + 'plots/band/'
     print(' ')
     print('     Making scaled maps...')
-    plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=True, latitude_bounds=(-36,36))
+    #plotMAPS_1D_2.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=True, latitude_bounds=(-36,36))
     print(' ')
     print('     Making scaled zonal plots...')
-    plotZONAL_1D.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=True)
+    #plotZONAL_1D_2.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=True)
 
     outp_path = data_path + 'plots/global/'
     print(' ')
     print('     Making unscaled maps...')
-    plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=False, latitude_bounds=None)
+    plotMAPS_1D_2.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=False, latitude_bounds=None)
     print(' ')
     print('     Making unscaled zonal plots...')
-    plotZONAL_1D.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False)
+    plotZONAL_1D_2.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False)
 
     outp_path = data_path + 'plots/band/'
     print(' ')
     print('     Making unscaled maps...')
-    plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=False, latitude_bounds=(-36,36))
+    #plotMAPS_1D.make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=True, apply_scale_factor=False, latitude_bounds=(-36,36))
     print(' ')
     print('     Making unscaled zonal plots...')
-    plotZONAL_1D.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False)
+    #plotZONAL_1D.make_zonal(data_path, outp_path, file_name, year, apply_scale_factor=False)
 
     #print(' ')
     #print('     Making animated map...')

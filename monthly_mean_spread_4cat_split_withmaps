@@ -9,6 +9,7 @@ from matplotlib.colors import (
     Normalize
 )
 from matplotlib.cm import ScalarMappable
+from matplotlib.ticker import AutoMinorLocator
 
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
@@ -42,10 +43,50 @@ variable = "fch4_wetl"
 
 
 # =========================================================
-# SELECTED Q10
+# Q10 SETTINGS
+# =========================================================
+#
+# IMPORTANT:
+# Q10 CODE "1" IS COMPLETELY EXCLUDED.
+#
+# The only Q10 codes allowed anywhere in this script are:
+#
+#     "2" = Q10 2.0
+#     "3" = Q10 3.0
+#     "4" = Q10 4.0
+#
+# Q10 code "1" = Q10 1.0 is NEVER loaded, plotted,
+# used in the bands, used in the colourbars, or used
+# as the reference NetCDF suite.
 # =========================================================
 
-SELECTED_Q10_CODE = "1"
+EXCLUDED_Q10_CODES = {
+    "1"
+}
+
+ALLOWED_Q10_CODES = [
+    "2",
+    "3",
+    "4"
+]
+
+SELECTED_Q10_CODE = "2"
+
+
+if SELECTED_Q10_CODE in EXCLUDED_Q10_CODES:
+
+    raise RuntimeError(
+        "Selected Q10 code is excluded: "
+        f"{SELECTED_Q10_CODE}"
+    )
+
+
+if SELECTED_Q10_CODE not in ALLOWED_Q10_CODES:
+
+    raise RuntimeError(
+        "Selected Q10 code is not in ALLOWED_Q10_CODES: "
+        f"{SELECTED_Q10_CODE}"
+    )
 
 
 print(
@@ -57,6 +98,16 @@ print(
 print(
     "Looking in:",
     directory
+)
+
+print(
+    "EXCLUDED Q10 codes:",
+    sorted(EXCLUDED_Q10_CODES)
+)
+
+print(
+    "ALLOWED Q10 codes:",
+    ALLOWED_Q10_CODES
 )
 
 print(
@@ -137,6 +188,32 @@ for subdir in sorted(directory.iterdir()):
     q10 = code[1]
     soilmap = code[2]
     dynamics = code[3]
+
+    # =====================================================
+    # COMPLETELY EXCLUDE Q10 CODE 1
+    # =====================================================
+
+    if q10 in EXCLUDED_Q10_CODES:
+
+        print(
+            f"EXCLUDED {name}: "
+            f"Q10={q10}"
+        )
+
+        continue
+
+    # =====================================================
+    # ONLY ALLOW Q10 CODES 2, 3, 4
+    # =====================================================
+
+    if q10 not in ALLOWED_Q10_CODES:
+
+        print(
+            f"EXCLUDED {name}: "
+            f"Q10={q10} is not an allowed Q10 code"
+        )
+
+        continue
 
     filepath = (
         subdir
@@ -232,6 +309,16 @@ print(
 )
 
 print(
+    "Excluded Q10 code:",
+    "1"
+)
+
+print(
+    "Allowed Q10 codes:",
+    ALLOWED_Q10_CODES
+)
+
+print(
     "Selected Q10 code:",
     SELECTED_Q10_CODE
 )
@@ -244,6 +331,25 @@ print(
 print(
     "==============================================="
 )
+
+
+# =========================================================
+# HARD CHECK:
+# Q10 CODE 1 MUST NOT HAVE BEEN LOADED
+# =========================================================
+
+loaded_q10_codes_from_files = {
+    str(item[2])
+    for item in files
+}
+
+
+if "1" in loaded_q10_codes_from_files:
+
+    raise RuntimeError(
+        "Q10 code 1 was loaded into files. "
+        "This is forbidden."
+    )
 
 
 # =========================================================
@@ -271,27 +377,28 @@ substrate_labels = {
 }
 
 
-# ---------------------------------------------------------
-# Q10 alpha values
-# ---------------------------------------------------------
+# =========================================================
+# Q10 ALPHA VALUES
+# =========================================================
+#
+# Q10 = 1 HAS BEEN REMOVED COMPLETELY.
+# =========================================================
 
 q10_alpha = {
-    "0": 0.10,
-    "1": 0.25,
-    "2": 0.50,
-    "3": 0.80
+    "2": 0.10,
+    "3": 0.50,
+    "4": 0.95
 }
 
 
 q10_labels = {
-    "0": "1.0",
-    "1": "2.0",
-    "2": "3.0",
-    "3": "4.0"
+    "2": "2.0",
+    "3": "3.0",
+    "4": "4.0"
 }
 
 
-panel_background = "gainsboro"
+panel_background = "gray"
 
 ensemble_fill_color = "white"
 
@@ -340,6 +447,14 @@ for (
     filepath
 ) in files:
 
+    # Extra safety check
+    if str(q10) in EXCLUDED_Q10_CODES:
+
+        raise RuntimeError(
+            f"Attempted to load excluded Q10 "
+            f"code {q10} from {name}"
+        )
+
     y = np.asarray(
         np.loadtxt(
             filepath
@@ -368,6 +483,35 @@ if len(loaded_data) == 0:
     raise RuntimeError(
         "No data files were found."
     )
+
+
+# =========================================================
+# HARD CHECK:
+# LOADED DATA MUST NOT CONTAIN Q10 = 1
+# =========================================================
+
+loaded_q10_codes = {
+    str(item[2])
+    for item in loaded_data
+}
+
+
+if "1" in loaded_q10_codes:
+
+    raise RuntimeError(
+        "Loaded data contains Q10 code 1. "
+        "Q10=1 must be completely excluded."
+    )
+
+
+print()
+print(
+    "Loaded Q10 codes:",
+    sorted(
+        loaded_q10_codes,
+        key=lambda q: int(q)
+    )
+)
 
 
 # =========================================================
@@ -443,11 +587,9 @@ if finite_nonzero_values.size == 0:
     )
 
 
-global_y_min = 0.025
+global_y_min = 0.045
 
-
-global_y_max = 0.075
-
+global_y_max = 0.071
 
 y_padding = (
     global_y_max
@@ -535,6 +677,17 @@ def plot_smooth_q10_band(
     y_axis_max,
     zorder=1
 ):
+
+    # =====================================================
+    # HARD EXCLUSION OF Q10 = 1
+    # =====================================================
+
+    q10_data = {
+        str(q): value
+        for q, value in q10_data.items()
+        if str(q) not in EXCLUDED_Q10_CODES
+        and str(q) in ALLOWED_Q10_CODES
+    }
 
     q10_codes = sorted(
         q10_data.keys(),
@@ -682,11 +835,11 @@ def plot_smooth_q10_band(
     )
 
     # =====================================================
-    # EMPHASISE TOP AND BOTTOM OF EACH COLLARED BAND
+    # EMPHASISE TOP AND BOTTOM OF COLLARED BAND
     # =====================================================
 
     COLLAR_BOUNDARY_LINEWIDTH = 0.55
-    COLLAR_BOUNDARY_ALPHA = 0.90
+    COLLAR_BOUNDARY_ALPHA = 0.0
 
     ax.plot(
         x_fine,
@@ -723,6 +876,14 @@ def plot_q10_line(
     zorder=4
 ):
 
+    # Q10=1 is forbidden
+    if str(q10_code) in EXCLUDED_Q10_CODES:
+
+        raise RuntimeError(
+            "plot_q10_line received excluded Q10 "
+            f"code {q10_code}"
+        )
+
     base_rgba = np.array(
         to_rgba(
             color_map[substrate]
@@ -731,14 +892,8 @@ def plot_q10_line(
 
     base_rgba[3] = 1.0
 
-    # ax.plot(
-    #     x,
-    #     y,
-    #     color=base_rgba,
-    #     linestyle=":",
-    #     linewidth=linewidth,
-    #     zorder=zorder
-    # )
+    # Intentionally no line plotted here,
+    # matching the original script.
 
 
 # =========================================================
@@ -779,14 +934,66 @@ def find_netcdf(base):
 # =========================================================
 # REFERENCE NETCDF
 # =========================================================
+#
+# IMPORTANT:
+# DO NOT USE Q10 CODE 1 HERE.
+#
+# The reference suite is now:
+#
+#     u-dk105_0200
+#
+# i.e.
+# substrate = 0
+# Q10       = 2
+# soilmap   = 0
+# dynamics  = 0
+#
+# This is deliberately a Q10=2 suite.
+# =========================================================
+
+REFERENCE_Q10_CODE = SELECTED_Q10_CODE
+
+if REFERENCE_Q10_CODE in EXCLUDED_Q10_CODES:
+
+    raise RuntimeError(
+        "Reference Q10 code is excluded: "
+        f"{REFERENCE_Q10_CODE}"
+    )
+
 
 reference_suite = (
     "u-dk105_"
     + "0"
-    + SELECTED_Q10_CODE
+    + REFERENCE_Q10_CODE
     + "0"
     + "0"
 )
+
+
+# =========================================================
+# FINAL REFERENCE SUITE SAFETY CHECK
+# =========================================================
+
+reference_code = reference_suite.split("_")[1]
+
+reference_q10 = reference_code[1]
+
+
+if reference_q10 in EXCLUDED_Q10_CODES:
+
+    raise RuntimeError(
+        "Reference suite accidentally contains "
+        f"excluded Q10 code {reference_q10}."
+    )
+
+
+if reference_q10 not in ALLOWED_Q10_CODES:
+
+    raise RuntimeError(
+        "Reference suite contains Q10 code "
+        f"{reference_q10}, which is not allowed."
+    )
+
 
 reference_file = find_netcdf(
     directory / reference_suite
@@ -800,6 +1007,10 @@ print(
 
 print(
     f"  Suite: {reference_suite}"
+)
+
+print(
+    f"  Q10: {reference_q10}"
 )
 
 print(
@@ -1317,10 +1528,24 @@ def get_map_suite(
     soilmap = panel_key[0]
     dynamics = panel_key[1]
 
+    # =====================================================
+    # ALWAYS USE SELECTED Q10 = 2
+    # NEVER Q10 = 1
+    # =====================================================
+
+    q10_code = SELECTED_Q10_CODE
+
+    if q10_code in EXCLUDED_Q10_CODES:
+
+        raise RuntimeError(
+            "get_map_suite attempted to use "
+            f"excluded Q10 code {q10_code}"
+        )
+
     return (
         "u-dk105_"
         + str(substrate)
-        + SELECTED_Q10_CODE
+        + q10_code
         + str(soilmap)
         + str(dynamics)
     )
@@ -1374,6 +1599,16 @@ for panel_key in PANEL_BASE_SUITES.keys():
             panel_key,
             substrate
         )
+
+        # Safety check
+        suite_q10 = suite.split("_")[1][1]
+
+        if suite_q10 in EXCLUDED_Q10_CODES:
+
+            raise RuntimeError(
+                f"Map suite {suite} contains "
+                f"excluded Q10 code {suite_q10}"
+            )
 
         selected_maps[
             panel_key
@@ -1471,7 +1706,17 @@ def add_substrate_q10_ocean(
     q10_code=SELECTED_Q10_CODE
 ):
 
-    if q10_code not in q10_alpha:
+    # =====================================================
+    # HARD EXCLUSION
+    # =====================================================
+
+    if str(q10_code) in EXCLUDED_Q10_CODES:
+
+        raise ValueError(
+            f"Q10 code {q10_code} is excluded."
+        )
+
+    if str(q10_code) not in q10_alpha:
 
         raise ValueError(
             f"No Q10 alpha defined for "
@@ -1483,7 +1728,7 @@ def add_substrate_q10_ocean(
     ]
 
     alpha = q10_alpha[
-        q10_code
+        str(q10_code)
     ]
 
     substrate_rgb = np.array(
@@ -1514,7 +1759,7 @@ def add_substrate_q10_ocean(
     print(
         f"  Ocean colour: "
         f"substrate={substrate_labels[substrate]}, "
-        f"Q10={q10_labels[q10_code]}, "
+        f"Q10={q10_labels[str(q10_code)]}, "
         f"alpha={alpha:.2f}, "
         f"RGB="
         f"({washed_rgb[0]:.3f}, "
@@ -2215,11 +2460,11 @@ for row, soilmap in enumerate(
         ].set_visible(False)
 
         ax.set_facecolor(
-            panel_background
+            panel_background,
         )
 
         ax.patch.set_alpha(
-            0.75
+            0.35
         )
 
         ax.set_ylim(
@@ -2232,6 +2477,8 @@ for row, soilmap in enumerate(
             for item in loaded_data
             if item[3] == soilmap
             and item[4] == dynamics
+            and str(item[2]) not in EXCLUDED_Q10_CODES
+            and str(item[2]) in ALLOWED_Q10_CODES
         ]
 
         selected_suite = PANEL_BASE_SUITES[
@@ -2308,6 +2555,18 @@ for row, soilmap in enumerate(
                 q10
             )
 
+            # =================================================
+            # ABSOLUTE FINAL Q10=1 EXCLUSION
+            # =================================================
+
+            if q10 in EXCLUDED_Q10_CODES:
+
+                continue
+
+            if q10 not in ALLOWED_Q10_CODES:
+
+                continue
+
             if substrate not in data:
 
                 data[substrate] = {}
@@ -2329,14 +2588,37 @@ for row, soilmap in enumerate(
             if substrate not in data:
                 continue
 
-            q10_data = data[
-                substrate
-            ]
+            q10_data = {
+                q: y
+                for q, y in data[substrate].items()
+                if q not in EXCLUDED_Q10_CODES
+                and q in ALLOWED_Q10_CODES
+            }
+
+            if not q10_data:
+                continue
 
             available_q10 = sorted(
                 q10_data.keys(),
                 key=lambda q: int(q)
             )
+
+            print(
+                f"  {substrate_labels[substrate]} "
+                f"Q10 values plotted: "
+                f"{[q10_labels[q] for q in available_q10]}"
+            )
+
+            # =================================================
+            # HARD SAFETY CHECK
+            # =================================================
+
+            if "1" in available_q10:
+
+                raise RuntimeError(
+                    f"Q10=1 reached plotting stage for "
+                    f"substrate {substrate}."
+                )
 
             if len(available_q10) < 2:
                 continue
@@ -2404,39 +2686,32 @@ for row, soilmap in enumerate(
         # =================================================
         # NORMAL GRIDLINES
         # =================================================
-        #
-        # All gridlines are initially gray.
-        # March and September are overwritten below in
-        # black.
-        # =================================================
+
+        ax.yaxis.set_minor_locator(
+            AutoMinorLocator(2)
+        )
 
         ax.grid(
-            alpha=0.35,
+            which="major",
+            axis="y",
+            alpha=0.7,
             linewidth=0.8,
-            color="gray",
-            zorder=2
+            color="black",
+            zorder=0
+        )
+
+        ax.grid(
+            which="minor",
+            axis="y",
+            alpha=0.2,
+            linewidth=0.8,
+            color="black",
+            zorder=0
         )
 
 
 # =========================================================
 # BLACK VERTICAL GRIDLINES AT MARCH AND SEPTEMBER
-# =========================================================
-#
-# IMPORTANT:
-#
-# Your monthly x positions are:
-#
-# Jan = 0
-# Feb = 1
-# Mar = 2
-# ...
-# Sep = 8
-#
-# Therefore the vertical gridlines corresponding to
-# March and September are x = 2 and x = 8.
-#
-# These are drawn explicitly AFTER the normal gray grid,
-# so they appear black and sit above the other gridlines.
 # =========================================================
 
 MARCH_INDEX = 2
@@ -2444,7 +2719,7 @@ SEPTEMBER_INDEX = 8
 
 SPECIAL_GRIDLINE_COLOR = "black"
 SPECIAL_GRIDLINE_LINEWIDTH = 1.2
-SPECIAL_GRIDLINE_ALPHA = 0.3
+SPECIAL_GRIDLINE_ALPHA = 0.0
 SPECIAL_GRIDLINE_ZORDER = 10
 
 
@@ -2470,11 +2745,12 @@ for ax in axes.flat:
 
 
 # =========================================================
-# Q10 = 2 SQUARE PLOT SYMBOLS ON MARCH AND SEPTEMBER
+# Q10 = 2 SUBSTRATE-COLOURED CIRCLE SYMBOLS
+# ON MARCH AND SEPTEMBER
 # =========================================================
 
 Q10_MARKER_SIZE = 5
-Q10_MARKER_LINEWIDTH = 0.9
+Q10_MARKER_LINEWIDTH = 0.0
 
 march_index = 2
 september_index = 8
@@ -2485,7 +2761,10 @@ for row, soilmap in enumerate(soilmaps):
 
         ax = axes[row, col]
 
-        panel_key = (soilmap, dynamics)
+        panel_key = (
+            soilmap,
+            dynamics
+        )
 
         panel_q10_data = q10_plot_data.get(
             panel_key,
@@ -2497,7 +2776,13 @@ for row, soilmap in enumerate(soilmaps):
             if substrate not in panel_q10_data:
                 continue
 
-            y = panel_q10_data[substrate]
+            y = panel_q10_data[
+                substrate
+            ]
+
+            substrate_colour = color_map[
+                substrate
+            ]
 
             for index in (
                 march_index,
@@ -2513,16 +2798,16 @@ for row, soilmap in enumerate(soilmaps):
                         ax.plot(
                             index,
                             y_value,
-                            marker="o",
+                            marker="s",
                             markersize=Q10_MARKER_SIZE,
-                            markerfacecolor="white",
+                            markerfacecolor=substrate_colour,
                             markeredgecolor="black",
                             markeredgewidth=Q10_MARKER_LINEWIDTH,
                             linestyle="none",
                             zorder=20,
                             clip_on=False,
+                            alpha=0.7
                         )
-
 
 
 # =========================================================
@@ -2700,6 +2985,11 @@ ensemble_legend = fig.legend(
 # =========================================================
 # THREE SUBSTRATE Q10 COLORBARS
 # =========================================================
+#
+# ONLY Q10 = 2, 3, 4.
+#
+# Q10 = 1 DOES NOT EXIST IN THIS COLORBAR.
+# =========================================================
 
 def create_substrate_q10_colorbar(
     fig,
@@ -2717,9 +3007,12 @@ def create_substrate_q10_colorbar(
         )[:3]
     )
 
+    # =====================================================
+    # Q10 VALUES: 2, 3, 4 ONLY
+    # =====================================================
+
     q10_positions = np.array(
         [
-            1.0,
             2.0,
             3.0,
             4.0
@@ -2728,17 +3021,16 @@ def create_substrate_q10_colorbar(
 
     q10_alpha_values = np.array(
         [
-            q10_alpha["0"],
-            q10_alpha["1"],
             q10_alpha["2"],
-            q10_alpha["3"]
+            q10_alpha["3"],
+            q10_alpha["4"]
         ]
     )
 
     n = 256
 
     q10_dense = np.linspace(
-        1.0,
+        2.0,
         4.0,
         n
     )
@@ -2749,25 +3041,51 @@ def create_substrate_q10_colorbar(
         q10_alpha_values
     )
 
-    rgba_table = np.zeros(
+    # =====================================================
+    # WASH COLOUR TOWARD WHITE
+    # =====================================================
+
+    WASH_FACTOR=0.7
+
+    white_rgb = np.ones(3)
+
+    washed_rgb = (
+        WASH_FACTOR
+        * alpha_dense[:, np.newaxis]
+        * base_rgb
+        +
+        (
+            1.0
+            -
+            WASH_FACTOR * alpha_dense[:, np.newaxis]
+        )
+        * white_rgb
+    )
+
+    rgba_table = np.ones(
         (
             n,
             4
         )
     )
 
-    rgba_table[:, 0] = base_rgb[0]
-    rgba_table[:, 1] = base_rgb[1]
-    rgba_table[:, 2] = base_rgb[2]
-    rgba_table[:, 3] = alpha_dense
+    rgba_table[:, :3] = washed_rgb
+
+    # Fully opaque colourbar
+    rgba_table[:, 3] = 1.0
+
 
     cmap = LinearSegmentedColormap.from_list(
         f"q10_{substrate}",
         rgba_table
     )
 
+    # =====================================================
+    # COLORBAR NOW RUNS FROM Q10=2 TO Q10=4
+    # =====================================================
+
     norm = Normalize(
-        vmin=1.0,
+        vmin=2.0,
         vmax=4.0
     )
 
@@ -2779,7 +3097,7 @@ def create_substrate_q10_colorbar(
     mappable.set_array(
         np.array(
             [
-                1.0,
+                2.0,
                 4.0
             ]
         )
@@ -2800,9 +3118,12 @@ def create_substrate_q10_colorbar(
         orientation="vertical"
     )
 
+    # =====================================================
+    # ONLY 2, 3, 4 TICKS
+    # =====================================================
+
     cbar.set_ticks(
         [
-            1.0,
             2.0,
             3.0,
             4.0
@@ -2813,7 +3134,6 @@ def create_substrate_q10_colorbar(
 
         cbar.set_ticklabels(
             [
-                "1.0",
                 "2.0",
                 "3.0",
                 "4.0"
@@ -2857,7 +3177,7 @@ def create_substrate_q10_colorbar(
     )
 
     # =====================================================
-    # BLACK X MARKER AT Q10 = 2.0
+    # MARK SELECTED Q10 = 2.0
     # =====================================================
 
     Q10_MARKER = 2.0
@@ -2865,19 +3185,19 @@ def create_substrate_q10_colorbar(
     cbar.ax.plot(
         0.5,
         Q10_MARKER,
-        marker="o",
-        markersize=5,
+        marker="s",
+        markersize=Q10_MARKER_SIZE,
+        markerfacecolor=color_map[substrate],
         markeredgecolor="black",
-        markeredgewidth=1.2,
+        markeredgewidth=Q10_MARKER_LINEWIDTH,
         linestyle="none",
         transform=cbar.ax.get_yaxis_transform(),
         clip_on=False,
         zorder=20,
-        color='white'
+        alpha=0.7
     )
 
     return cbar
-
 
 
 # =========================================================
@@ -2995,6 +3315,83 @@ add_map_colorbar(
 
 
 # =========================================================
+# FINAL GLOBAL Q10 SAFETY CHECK
+# =========================================================
+#
+# This checks the actual data structures immediately
+# before saving.
+# =========================================================
+
+final_q10_codes = {
+    str(item[2])
+    for item in loaded_data
+}
+
+
+if "1" in final_q10_codes:
+
+    raise RuntimeError(
+        "FINAL SAFETY CHECK FAILED: "
+        "Q10=1 is present in loaded_data."
+    )
+
+
+if set(final_q10_codes) - set(ALLOWED_Q10_CODES):
+
+    raise RuntimeError(
+        "FINAL SAFETY CHECK FAILED: "
+        "Unexpected Q10 codes found: "
+        + str(
+            sorted(
+                set(final_q10_codes)
+                - set(ALLOWED_Q10_CODES)
+            )
+        )
+    )
+
+
+print()
+print(
+    "==============================================="
+)
+
+print(
+    "FINAL Q10 CHECK"
+)
+
+print(
+    "Q10=1 excluded: YES"
+)
+
+print(
+    "Q10 codes actually loaded:",
+    sorted(
+        final_q10_codes,
+        key=lambda q: int(q)
+    )
+)
+
+print(
+    "Q10 codes plotted in bands:",
+    ["2.0", "3.0", "4.0"]
+)
+
+print(
+    "Selected Q10:",
+    "2.0"
+)
+
+print(
+    "Reference suite:",
+    reference_suite
+)
+
+print(
+    "==============================================="
+)
+
+
+# =========================================================
 # SAVE
 # =========================================================
 
@@ -3015,7 +3412,7 @@ output_file = (
     / (
         "monthly_mean_soilmap_plantmode_2x2_"
         "substrate_ensemble_filled_with_"
-        "Mar_Sep_maps_Q10_2_2x3.png"
+        "Mar_Sep_maps_Q10_2_3_4.png"
     )
 )
 
