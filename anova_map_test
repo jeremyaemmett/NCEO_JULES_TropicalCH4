@@ -1,0 +1,267 @@
+from pathlib import Path
+from itertools import combinations
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import readJULES
+
+# SETTINGS
+directory=Path("/Users/jae35/Desktop/JULES_test_data/ID_suites")
+grid_netcdf=directory/"u-dk105_0000/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2015.nc"
+apply_scale_factor=True
+scale_folder="scaled" if apply_scale_factor else "unscaled"
+include_interactions=False
+
+MONTHS=[(i,n,s) for i,n,s in [
+    (0,"January","Jan"),(1,"February","Feb"),(2,"March","Mar"),
+    (3,"April","Apr"),(4,"May","May"),(5,"June","Jun"),
+    (6,"July","Jul"),(7,"August","Aug"),(8,"September","Sep"),
+    (9,"October","Oct"),(10,"November","Nov"),(11,"December","Dec")]]
+FINAL_FIGURE_MONTHS=[(2,"March","Mar"),(5,"June","Jun"),(8,"September","Sep"),(11,"December","Dec")]
+
+LAND_COLOUR="#f5e6c8"; OCEAN_COLOUR=LAKE_COLOUR="#a6cee3"
+ANOVA_COLOURS=["#f5e6c8","#f2d27d","#f4a340","#e85d2a","#c62828","#8f0000","#4d0000"]
+DOMINANT_COLOURS=["#e41a1c","#377eb8","#4daf4a","#984ea3","#ff7f00"]
+LEGEND_LABELS=["Competition","Substrate","Q10","Soil map","Interactions / unaccounted"]
+
+anova_cmap=mcolors.LinearSegmentedColormap.from_list("anova_tan_red",ANOVA_COLOURS,N=256)
+anova_cmap.set_bad((0,0,0,0))
+dominant_cmap=mcolors.ListedColormap(DOMINANT_COLOURS)
+dominant_norm=mcolors.BoundaryNorm(np.arange(.5,6.5),dominant_cmap.N)
+
+competition_levels=["0","1"]
+substrates=["0","1","2"]
+q10_levels=["0","1","2","3"]
+soilmap_levels=["0","1"]
+
+component_titles={"competition":"Competition","substrate":"Substrate","q10":"Q10",
+                  "soilmap":"Soil map","interactions_unaccounted":"Interactions / unaccounted"}
+plot_components=list(component_titles)
+
+def get_factor_arrays(files):
+    return {k:np.array([int(x[i]) for x in files])
+            for k,i in [("competition",1),("substrate",2),("q10",3),("soilmap",4)]}
+
+def find_monthly_maps(month_number,month_short):
+    fn=f"fch4_wetl_2005_({month_number}){month_short}_map.txt"
+    print(f"\n{'='*80}\nFINDING {month_short.upper()} MAPS\n{'='*80}\nLooking for:\n    {fn}")
+    files=[]; maps=[]
+    for d in sorted(directory.iterdir()):
+        if not d.is_dir(): continue
+        p=d.name.split("_")
+        if len(p)<2 or len(p[1])<4: continue
+        code=p[1]; sub,q10,soil,comp=code[:4]
+        if sub not in substrates or q10 not in q10_levels or soil not in soilmap_levels or comp not in competition_levels: continue
+        f=d/"plots/output"/scale_folder/"fch4_wetl"/fn
+        if not f.exists(): continue
+        try: data=np.loadtxt(f)
+        except Exception as e: print(f"Could not read {f}: {e}"); continue
+        files.append((d.name,comp,sub,q10,soil,f)); maps.append(data)
+    print(f"{month_short}: {len(maps)} maps found")
+    return files,maps
+
+def calculate_anova_maps(values,analysis_mask,factor_arrays,include_interactions=False):
+    n,ny,nx=values.shape; names=list(factor_arrays)
+    components={x:np.full((ny,nx),np.nan) for x in names}
+    if include_interactions:
+        for o in range(2,len(names)+1):
+            for c in combinations(names,o): components[":".join(c)]=np.full((ny,nx),np.nan)
+    else: components["interactions_unaccounted"]=np.full((ny,nx),np.nan)
+
+    for i,j in np.argwhere(analysis_mask):
+        y=values[:,i,j]
+        if not np.all(np.isfinite(y)): continue
+        gm=np.mean(y); total_ss=np.sum((y-gm)**2)
+        if total_ss<=0:
+            for x in components: components[x][i,j]=0.
+            continue
+
+        main_total=0.
+        for name,factor in factor_arrays.items():
+            ss=0.
+            for level in np.unique(factor):
+                mask=factor==level; nn=np.sum(mask)
+                if nn: ss+=nn*(np.mean(y[mask])-gm)**2
+            pct=100*ss/total_ss; components[name][i,j]=pct; main_total+=pct
+
+        if not include_interactions:
+            components["interactions_unaccounted"][i,j]=100-main_total
+            continue
+
+        means={}
+        for o in range(1,len(names)+1):
+            for subset in combinations(names,o):
+                levels=[np.unique(factor_arrays[x]) for x in subset]
+                for ind in np.ndindex(*[len(x) for x in levels]):
+                    lev=tuple(levels[k][ind[k]] for k in range(len(subset)))
+                    mask=np.ones(n,bool)
+                    for x,l in zip(subset,lev): mask &= factor_arrays[x]==l
+                    if np.any(mask): means[(subset,lev)]=np.mean(y[mask])
+
+        for o in range(2,len(names)+1):
+            for subset in combinations(names,o):
+                name=":".join(subset); ss=0.
+                levels=[np.unique(factor_arrays[x]) for x in subset]
+                for ind in np.ndindex(*[len(x) for x in levels]):
+                    lev=tuple(levels[k][ind[k]] for k in range(len(subset)))
+                    mask=np.ones(n,bool)
+                    for x,l in zip(subset,lev): mask &= factor_arrays[x]==l
+                    if not np.any(mask): continue
+                    v=means[(subset,lev)]
+                    for lo in range(1,o):
+                        sign=-1 if lo%2 else 1
+                        for lower in combinations(subset,lo):
+                            ll=tuple(lev[subset.index(x)] for x in lower)
+                            v+=sign*means[(lower,ll)]
+                    v+=-gm if o%2 else gm
+                    ss+=np.sum(mask)*v**2
+                components[name][i,j]=100*ss/total_ss
+    return components
+
+# GRID
+print("="*80+"\nREADING JULES GEOGRAPHIC GRID\n"+"="*80)
+if not grid_netcdf.exists(): raise FileNotFoundError(f"Could not find:\n{grid_netcdf}")
+header=readJULES.read_jules_header(str(grid_netcdf)); keys=list(header[1])
+if "latitude" in keys and "longitude" in keys: lat_string,lon_string="latitude","longitude"
+elif "lat" in keys and "lon" in keys: lat_string,lon_string="lat","lon"
+else: raise RuntimeError("Could not find latitude/longitude variables.")
+lats,*_=readJULES.read_jules_m2(str(grid_netcdf),lat_string)
+lons,*_=readJULES.read_jules_m2(str(grid_netcdf),lon_string)
+lf=lats.flatten(); lof=lons.flatten(); m=np.isfinite(lf)&np.isfinite(lof)
+lu=np.sort(np.unique(lf[m])); lou=np.sort(np.unique(lof[m]))
+dlat=np.median(np.diff(lu)); dlon=np.median(np.diff(lou))
+lat_grid=np.arange(lu.min(),lu.max()+dlat/2,dlat)
+lon_grid=np.arange(lou.min(),lou.max()+dlon/2,dlon)
+Ny,Nx=len(lat_grid),len(lon_grid)
+lon_plot=((lon_grid+180)%360)-180 if lon_grid.min()>=0 and lon_grid.max()>180 else lon_grid.copy()
+lon_plot=np.sort(lon_plot)
+lon2d,lat2d=np.meshgrid(lon_plot,lat_grid)
+lon_min,lon_max=np.nanmin(lon2d),np.nanmax(lon2d); lat_min,lat_max=np.nanmin(lat2d),np.nanmax(lat2d)
+lon_margin=max(abs(dlon)*1.5,1.); lat_margin=max(abs(dlat)*1.5,1.)
+lon_sort_index=np.argsort(((lon_grid+180)%360)-180) if lon_grid.min()>=0 and lon_grid.max()>180 else np.arange(Nx)
+
+def add_base_map(ax):
+    for f,c,z in [(cfeature.OCEAN,OCEAN_COLOUR,0),(cfeature.LAND,LAND_COLOUR,1),(cfeature.LAKES,LAKE_COLOUR,1)]:
+        ax.add_feature(f,facecolor=c,edgecolor="none",zorder=z)
+
+def set_extent(ax):
+    if lon_min<=-179 and lon_max>=179: ax.set_global()
+    else: ax.set_extent([lon_min-lon_margin,lon_max+lon_margin,lat_min-lat_margin,lat_max+lat_margin],crs=ccrs.PlateCarree())
+
+def add_map_details(ax):
+    ax.add_feature(cfeature.BORDERS.with_scale("50m"),linewidth=.7,edgecolor="gray",zorder=4)
+    ax.coastlines(resolution="50m",linewidth=.8,zorder=4)
+    gl=ax.gridlines(draw_labels=True,linewidth=.6,color="gray",alpha=.7,linestyle="--",zorder=5)
+    gl.top_labels=gl.right_labels=False; gl.xlabel_style={"fontsize":8}; gl.ylabel_style={"fontsize":8}
+
+def make_handles():
+    return [plt.Line2D([0],[0],marker="s",linestyle="",markersize=9,
+                       markerfacecolor=c,markeredgecolor="none",label=l)
+            for c,l in zip(DOMINANT_COLOURS,LEGEND_LABELS)]
+
+def process_month(month_number,month_name,month_short):
+    print(f"\n\n{'#'*80}\n# PROCESSING {month_name.upper()} ({month_number}, {month_short})\n{'#'*80}")
+    files,maps=find_monthly_maps(month_number,month_short)
+    if not maps: print(f"NO {month_name} FILES FOUND — SKIPPING."); return
+    shapes=[x.shape for x in maps]
+    if len(set(shapes))!=1: raise RuntimeError(f"{month_name}: map files have different shapes: {set(shapes)}")
+    shape=maps[0].shape
+    if len(shape)!=2: raise RuntimeError(f"{month_name}: expected 2D maps, got {shape}")
+    if shape!=(Ny,Nx): raise RuntimeError(f"{month_name}: TXT map shape {shape} does not match geographic grid {(Ny,Nx)}")
+    a=np.stack(maps)[:,:,lon_sort_index]
+    count=np.isfinite(a).sum(0); domain=count>0; complete=count==len(maps)
+    factors=get_factor_arrays(files)
+    expected=np.prod([len(np.unique(v)) for v in factors.values()])
+    print(f"{month_name}: {len(maps)} ensemble members\n{month_name}: expected full factorial = {expected}\n{month_name}: calculating ANOVA...")
+    anova=calculate_anova_maps(a,complete,factors,include_interactions)
+    for d in anova.values():
+        d[np.isfinite(d)&(np.abs(d)<1e-10)]=0.
+    total=np.zeros(shape)
+    for d in anova.values(): total+=np.nan_to_num(d)
+    total[~complete]=np.nan
+
+    out=directory/scale_folder/"anova_maps"/month_name; out.mkdir(parents=True,exist_ok=True)
+    for comp,d in anova.items():
+        np.savetxt(out/f"fch4_wetl_2005_{month_short}_anova_{comp.replace(':','_')}.txt",d,fmt="%.8e")
+    np.savetxt(out/f"fch4_wetl_2005_{month_short}_anova_total_percent.txt",total,fmt="%.8e")
+    coverage=np.zeros(shape,int); coverage[domain]=1; coverage[complete]=2
+    np.savetxt(out/f"fch4_wetl_2005_{month_short}_coverage_mask.txt",coverage,fmt="%d")
+
+    valid=complete&np.isfinite(total); cv=total[valid]
+    if cv.size: print(f"{month_name}: total min = {np.min(cv):.6f}%\n{month_name}: total max = {np.max(cv):.6f}%\n{month_name}: total mean = {np.mean(cv):.6f}%")
+
+    # SIX-PANEL FIGURE
+    print(f"{month_name}: creating six-panel figure...")
+    fig,axes=plt.subplots(2,3,figsize=(15,8.5),subplot_kw={"projection":ccrs.PlateCarree()}); axes=axes.ravel()
+    norm=mcolors.Normalize(0,100)
+    for ax,comp in zip(axes[:5],plot_components):
+        d=anova[comp].copy(); d[~complete]=np.nan
+        add_base_map(ax)
+        im=ax.pcolormesh(lon2d,lat2d,np.ma.masked_invalid(d),cmap=anova_cmap,norm=norm,shading="auto",transform=ccrs.PlateCarree(),zorder=2)
+        set_extent(ax); add_map_details(ax); ax.set_title(component_titles[comp],fontsize=12,fontweight="bold",pad=5)
+        cb=fig.colorbar(im,ax=ax,orientation="vertical",fraction=.025,pad=.01,shrink=.5)
+        cb.set_label("Variance contribution (%)",fontsize=8); cb.ax.tick_params(labelsize=7)
+    ax=axes[5]; add_base_map(ax)
+    im=ax.pcolormesh(lon2d,lat2d,np.ma.masked_invalid(total),cmap=anova_cmap,norm=norm,shading="auto",transform=ccrs.PlateCarree(),zorder=2)
+    set_extent(ax); add_map_details(ax); ax.set_title("Total percentage",fontsize=12,fontweight="bold",pad=5)
+    cb=fig.colorbar(im,ax=ax,orientation="vertical",fraction=.025,pad=.01,shrink=.5)
+    cb.set_label("Total variance contribution (%)",fontsize=8); cb.ax.tick_params(labelsize=7)
+    fig.suptitle(f"Spatial ANOVA — fCH4 wetland — {month_name} 2005",fontsize=16,fontweight="bold",y=.985)
+    fig.subplots_adjust(left=.025,right=.975,bottom=.035,top=.94,wspace=.08,hspace=.04)
+    fig.savefig(out/f"fch4_wetl_2005_{month_short}_anova_6panel.png",dpi=300,bbox_inches="tight",facecolor="white"); plt.close(fig)
+
+    # DOMINANT AXIS
+    names=["competition","substrate","q10","soilmap","interactions_unaccounted"]
+    stack=np.stack([anova[x] for x in names])
+    dominant=np.full(shape,np.nan)
+    ok=complete&np.isfinite(total)&(total>0)&np.all(np.isfinite(stack),axis=0)
+    dominant[ok]=np.argmax(stack[:,ok],axis=0)+1
+    zero=complete&np.isfinite(total)&(total<=0)
+    print(f"{month_name}: cells with total > 0% = {np.sum(ok)}\n{month_name}: cells with total = 0% = {np.sum(zero)}\n{month_name}: dominant cells assigned = {np.sum(np.isfinite(dominant))}")
+    np.savetxt(out/f"fch4_wetl_2005_{month_short}_anova_dominant_axis.txt",dominant,fmt="%.0f")
+
+    fig,ax=plt.subplots(figsize=(10,6),subplot_kw={"projection":ccrs.PlateCarree()}); add_base_map(ax)
+    ax.pcolormesh(lon2d,lat2d,np.ma.masked_invalid(dominant),cmap=dominant_cmap,norm=dominant_norm,shading="auto",transform=ccrs.PlateCarree(),zorder=2)
+    set_extent(ax); add_map_details(ax); ax.set_title(f"Dominant ANOVA axis — {month_name} 2005",fontsize=14,fontweight="bold",pad=7)
+    ax.legend(handles=make_handles(),loc="lower left",fontsize=8,frameon=True,framealpha=.9,handletextpad=.4,borderpad=.5)
+    fig.savefig(out/f"fch4_wetl_2005_{month_short}_anova_dominant_axis.png",dpi=300,bbox_inches="tight",facecolor="white"); plt.close(fig)
+    print(f"FINISHED {month_name}")
+
+def create_final_2x2_figure():
+    print(f"\n{'='*80}\nCREATING FINAL 2x2 SEASONAL DOMINANT-AXIS FIGURE\n{'='*80}")
+    final_maps=[]
+    for num,name,short in FINAL_FIGURE_MONTHS:
+        f=directory/scale_folder/"anova_maps"/name/f"fch4_wetl_2005_{short}_anova_dominant_axis.txt"
+        print(f"\nLooking for {name}:\n    {f}")
+        if not f.exists(): print(f"WARNING: {name} dominant-axis map was not found.\nFinal 2x2 figure cannot be completed."); return
+        try: d=np.loadtxt(f)
+        except Exception as e: print(f"WARNING: Could not read {f}: {e}"); return
+        if d.shape!=(Ny,Nx): raise RuntimeError(f"{name}: dominant-axis map shape {d.shape} does not match geographic grid {(Ny,Nx)}")
+        final_maps.append((name,short,d)); print(f"{name}: loaded successfully.")
+
+    print("\nCreating March / June / September / December figure...")
+    fig,axes=plt.subplots(2,2,figsize=(14,9),subplot_kw={"projection":ccrs.PlateCarree()}); axes=axes.ravel()
+    for ax,(name,short,d) in zip(axes,final_maps):
+        add_base_map(ax); ax.pcolormesh(lon2d,lat2d,np.ma.masked_invalid(d),cmap=dominant_cmap,norm=dominant_norm,shading="auto",transform=ccrs.PlateCarree(),zorder=2)
+        set_extent(ax); add_map_details(ax); ax.set_title(name,fontsize=15,fontweight="bold",pad=7)
+    fig.legend(handles=make_handles(),loc="lower center",ncol=5,fontsize=9,frameon=True,framealpha=.95,handletextpad=.4,columnspacing=1.5,borderpad=.6,bbox_to_anchor=(.5,.015))
+    fig.suptitle("Dominant ANOVA Axis — fCH4 Wetland — Selected Months 2005",fontsize=18,fontweight="bold",y=.975)
+    fig.subplots_adjust(left=.035,right=.965,bottom=.095,top=.92,wspace=.06,hspace=.08)
+    out=directory/scale_folder/"anova_maps"; out.mkdir(parents=True,exist_ok=True)
+    f=out/"fch4_wetl_2005_dominant_axis_Mar_Jun_Sep_Dec_2x2.png"
+    fig.savefig(f,dpi=300,bbox_inches="tight",facecolor="white"); plt.close(fig)
+    print(f"\nFINAL 2x2 FIGURE SAVED:\n    {f}\n\nPanels:\n    Top left     = March\n    Top right    = June\n    Bottom left  = September\n    Bottom right = December")
+
+# RUN
+print(f"\n{'='*80}\nSTARTING 12-MONTH ANOVA PROCESSING\n{'='*80}")
+for n,name,short in MONTHS:
+    try: process_month(n,name,short)
+    except Exception as e:
+        print(f"\n{'!'*80}\nERROR PROCESSING {name}:\n{repr(e)}\n{'!'*80}")
+        continue
+
+create_final_2x2_figure()
+
+print(f"\n{'='*80}\nALL PROCESSING FINISHED\n{'='*80}\n\nEach month was processed independently.\nEach successful month produces:\n  1. Competition\n  2. Substrate\n  3. Q10\n  4. Soil map\n  5. Interactions / unaccounted\n  6. Total percentage\n  7. Dominant axis\n\nA final 2x2 dominant-axis figure was requested for:\n  March\n  June\n  September\n  December\n\nTotal = 0% cells receive NO dominant axis.\nThose cells remain transparent on the dominant-axis maps.")

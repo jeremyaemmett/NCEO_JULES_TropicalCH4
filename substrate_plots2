@@ -1,0 +1,1374 @@
+import xarray as xr
+import numpy as np
+import matplotlib.pyplot as plt
+import cartopy.crs as ccrs
+import cartopy.io.shapereader as shpreader
+
+from PIL import Image, ImageDraw, ImageFont
+
+import io
+
+from shapely.geometry import Point
+from shapely.ops import unary_union
+from shapely.prepared import prep
+
+from cartopy.mpl.patch import geos_to_path
+from matplotlib.path import Path
+from matplotlib.patches import PathPatch
+
+
+# ============================================================
+# FILES
+# ============================================================
+
+ncfile1 = "/Users/jae35/Desktop/qrparm.soil_n96.nc"
+
+ncfile2 = (
+    "/Users/jae35/Desktop/"
+    "qrparm.soil.dust.merge-plus-soil_kaolinitic_"
+    "oxisols_ultisols_dominant_vn2.nc"
+)
+
+vars1 = [
+    "field329", "field330", "field332", "field1381",
+    "field336", "field333", "field335", "field342",
+    "field1395", "field1397", "field2011", "field1630"
+]
+
+vars2 = [
+    "sm_wilt", "sm_crit", "sm_sat", "b",
+    "hcon", "satcon", "hcap", "sathh",
+    "albsoil", "soilcarb", "soildens", "clayfrac"
+]
+
+
+# ============================================================
+# LONG VARIABLE NAMES
+# ============================================================
+
+long_names = {
+
+    "sm_wilt": "Wilting Point Soil Moisture",
+    "sm_crit": "Critical Soil Moisture",
+    "sm_sat": "Saturated Soil Moisture",
+    "b": "Clapp–Hornberger B Parameter",
+    "hcon": "Hydraulic Conductivity",
+    "satcon": "Saturated Hydraulic Conductivity",
+    "hcap": "Soil Heat Capacity",
+    "sathh": "Saturated Soil Hydraulic Head",
+    "albsoil": "Soil Albedo",
+    "soilcarb": "Soil Carbon Content",
+    "soildens": "Soil Bulk Density",
+    "clayfrac": "Clay Fraction",
+
+    "field329": "Wilting Point Soil Moisture",
+    "field330": "Critical Soil Moisture",
+    "field332": "Saturated Soil Moisture",
+    "field1381": "Clapp–Hornberger B Parameter",
+    "field336": "Hydraulic Conductivity",
+    "field333": "Saturated Hydraulic Conductivity",
+    "field335": "Soil Heat Capacity",
+    "field342": "Saturated Soil Hydraulic Head",
+    "field1395": "Soil Albedo",
+    "field1397": "Soil Carbon Content",
+    "field2011": "Soil Bulk Density",
+    "field1630": "Clay Fraction"
+}
+
+
+# ============================================================
+# AFRICA EXTENT
+# ============================================================
+
+LON_MIN = -20
+LON_MAX = 55
+
+LAT_MIN = -40
+LAT_MAX = 40
+
+
+# ============================================================
+# PROJECTION
+# ============================================================
+
+PROJECTION = ccrs.PlateCarree(
+    central_longitude=25
+)
+
+DATA_CRS = ccrs.PlateCarree()
+
+
+# ============================================================
+# OUTPUT QUALITY
+# ============================================================
+
+MAP_DPI = 300
+SAVE_DPI = 300
+
+
+# ============================================================
+# MAP SIZE
+# ============================================================
+
+SHEET_W = 700
+SHEET_H = 400
+
+
+# ============================================================
+# FINAL CANVAS
+# ============================================================
+
+FIG_W = 1200
+FIG_H = 1900
+
+
+# ============================================================
+# STACK GEOMETRY
+# ============================================================
+
+LAYER_SPACING = 175
+
+# Controls the lateral offset between map layers.
+LAYER_OFFSET_X = -150
+
+FILE_STACK_GAP = 250
+
+SLAB_THICKNESS = 14
+
+SLAB_DX = 3
+SLAB_DY = 8
+
+
+# ============================================================
+# LABEL SETTINGS
+# ============================================================
+
+LABEL_FONT_SIZE = 32
+
+# Distance between the map's right edge and the label.
+LABEL_GAP = 28
+
+# Independent horizontal movement of ALL labels.
+# Positive = right, negative = left.
+LABEL_OFFSET_X = 0
+
+LABEL_RIGHT_MARGIN = 25
+
+LABEL_LINE_SPACING = 5
+
+
+# ============================================================
+# OPEN DATA
+# ============================================================
+
+ds1 = xr.open_dataset(
+    ncfile1,
+    decode_times=False,
+    mask_and_scale=True
+)
+
+ds2 = xr.open_dataset(
+    ncfile2,
+    decode_times=False,
+    mask_and_scale=True
+)
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def to_2d(da):
+
+    for d in list(da.dims):
+
+        if d.lower() in [
+            "time",
+            "t",
+            "lev",
+            "level",
+            "z",
+            "height"
+        ]:
+
+            da = da.isel(
+                {d: 0}
+            )
+
+    while da.ndim > 2:
+
+        da = da.isel(
+            {da.dims[0]: 0}
+        )
+
+    return da
+
+
+def latlon(da):
+
+    lat = next(
+        d for d in da.dims
+        if "lat" in d.lower()
+    )
+
+    lon = next(
+        d for d in da.dims
+        if "lon" in d.lower()
+    )
+
+    return lat, lon
+
+
+# ============================================================
+# NORMALIZE LONGITUDE
+# ============================================================
+
+def normalize_longitude(da):
+
+    lat_dim, lon_dim = latlon(da)
+
+    lon = da[lon_dim]
+
+    if float(lon.max()) > 180:
+
+        new_lon = (
+            ((lon + 180) % 360) - 180
+        )
+
+        da = da.assign_coords(
+            {lon_dim: new_lon}
+        )
+
+        da = da.sortby(
+            lon_dim
+        )
+
+    return da
+
+
+# ============================================================
+# CROP
+# ============================================================
+
+def crop_data(da):
+
+    da = normalize_longitude(da)
+
+    lat_dim, lon_dim = latlon(da)
+
+    lat = da[lat_dim]
+    lon = da[lon_dim]
+
+    return da.sel(
+        {
+            lat_dim: (
+                (lat >= LAT_MIN)
+                &
+                (lat <= LAT_MAX)
+            ),
+
+            lon_dim: (
+                (lon >= LON_MIN)
+                &
+                (lon <= LON_MAX)
+            )
+        }
+    )
+
+
+# ============================================================
+# LONG NAME
+# ============================================================
+
+def get_long_name(variable):
+
+    return long_names.get(
+        variable,
+        variable
+    )
+
+
+# ============================================================
+# FIND TOP THREE
+# ============================================================
+
+results = []
+
+for v1, v2 in zip(
+    vars1,
+    vars2
+):
+
+    print(
+        f"Calculating {v2} - {v1}"
+    )
+
+    da1 = normalize_longitude(
+        to_2d(
+            ds1[v1]
+        )
+    )
+
+    da2 = normalize_longitude(
+        to_2d(
+            ds2[v2]
+        )
+    )
+
+    lat1, lon1 = latlon(da1)
+    lat2, lon2 = latlon(da2)
+
+    lats1 = da1[lat1].values
+    lons1 = da1[lon1].values
+
+    lats2 = da2[lat2].values
+    lons2 = da2[lon2].values
+
+    grid_match = (
+        np.array_equal(lats1, lats2)
+        and
+        np.array_equal(lons1, lons2)
+    )
+
+    if grid_match:
+
+        da2r = da2
+
+    else:
+
+        print("  interpolating...")
+
+        da2r = da2.interp(
+            {
+                lat2: lats1,
+                lon2: lons1
+            }
+        )
+
+    diff = da2r - da1
+
+    values = diff.values
+
+    finite = np.isfinite(values)
+
+    if np.any(finite):
+
+        mean_abs_diff = np.mean(
+            np.abs(
+                values[finite]
+            )
+        )
+
+    else:
+
+        mean_abs_diff = np.nan
+
+    results.append(
+        {
+            "v1": v1,
+            "v2": v2,
+            "da1": da1,
+            "da2": da2r,
+            "diff": diff,
+            "mean_abs_diff": mean_abs_diff
+        }
+    )
+
+
+# ============================================================
+# SORT
+# ============================================================
+
+results.sort(
+    key=lambda r: (
+        r["mean_abs_diff"]
+        if np.isfinite(r["mean_abs_diff"])
+        else -np.inf
+    ),
+    reverse=True
+)
+
+top = results[:3][::-1]
+
+
+# ============================================================
+# PRINT TOP THREE
+# ============================================================
+
+print()
+print("=" * 80)
+print("TOP THREE VARIABLE PAIRS — REVERSED PLOTTING ORDER")
+print("=" * 80)
+
+for i, r in enumerate(top, 1):
+
+    print(
+        f"{i}. "
+        f"{get_long_name(r['v2'])} "
+        f"({r['v2']}) - "
+        f"{get_long_name(r['v1'])} "
+        f"({r['v1']})   "
+        f"mean |diff| = "
+        f"{r['mean_abs_diff']:.6g}"
+    )
+
+print("=" * 80)
+
+
+# ============================================================
+# CROP
+# ============================================================
+
+for r in top:
+
+    r["da1"] = crop_data(r["da1"])
+    r["da2"] = crop_data(r["da2"])
+
+
+# ============================================================
+# AFRICA-ONLY COUNTRY GEOMETRY
+# ============================================================
+
+def make_africa_geometry():
+
+    print(
+        "Loading Natural Earth African countries..."
+    )
+
+    shpfilename = shpreader.natural_earth(
+        resolution="50m",
+        category="cultural",
+        name="admin_0_countries"
+    )
+
+    reader = shpreader.Reader(
+        shpfilename
+    )
+
+    africa_geometries = []
+
+    for record in reader.records():
+
+        continent = record.attributes.get(
+            "CONTINENT"
+        )
+
+        if continent != "Africa":
+            continue
+
+        geom = record.geometry
+
+        minx, miny, maxx, maxy = geom.bounds
+
+        if (
+            maxx < LON_MIN
+            or minx > LON_MAX
+            or maxy < LAT_MIN
+            or miny > LAT_MAX
+        ):
+            continue
+
+        africa_geometries.append(
+            geom
+        )
+
+    if not africa_geometries:
+
+        raise RuntimeError(
+            "No African geometries were found."
+        )
+
+    return unary_union(
+        africa_geometries
+    )
+
+
+# ============================================================
+# BUILD AFRICA GEOMETRY
+# ============================================================
+
+print()
+print(
+    "Building AFRICA-ONLY coastline geometry..."
+)
+
+africa_geometry = make_africa_geometry()
+
+africa_prepared = prep(
+    africa_geometry
+)
+
+
+# ============================================================
+# BUILD AFRICA LAND MASK
+# ============================================================
+
+def make_africa_mask(
+    lon,
+    lat
+):
+
+    Lon, Lat = np.meshgrid(
+        lon,
+        lat
+    )
+
+    points = np.column_stack(
+        [
+            Lon.ravel(),
+            Lat.ravel()
+        ]
+    )
+
+    mask = np.array(
+        [
+            africa_prepared.contains(
+                Point(x, y)
+            )
+            for x, y in points
+        ],
+        dtype=bool
+    )
+
+    return mask.reshape(
+        Lon.shape
+    )
+
+
+# ============================================================
+# BUILD MASK FROM FIRST GRID
+# ============================================================
+
+lat_dim, lon_dim = latlon(
+    top[0]["da1"]
+)
+
+mask_lat = top[0]["da1"][
+    lat_dim
+].values
+
+mask_lon = top[0]["da1"][
+    lon_dim
+].values
+
+print(
+    "Building Africa land mask..."
+)
+
+africa_mask = make_africa_mask(
+    mask_lon,
+    mask_lat
+)
+
+
+# ============================================================
+# APPLY AFRICA MASK
+# ============================================================
+
+def apply_mask(
+    da,
+    mask
+):
+
+    data = da.values.astype(
+        float
+    )
+
+    data[
+        ~mask
+    ] = np.nan
+
+    return xr.DataArray(
+        data,
+        coords=da.coords,
+        dims=da.dims
+    )
+
+
+for r in top:
+
+    r["da1"] = apply_mask(
+        r["da1"],
+        africa_mask
+    )
+
+    r["da2"] = apply_mask(
+        r["da2"],
+        africa_mask
+    )
+
+
+# ============================================================
+# CREATE AFRICA CLIP PATH
+# ============================================================
+
+def make_coastline_clip_path():
+
+    paths = geos_to_path(
+        africa_geometry
+    )
+
+    return Path.make_compound_path(
+        *paths
+    )
+
+
+africa_clip_path = (
+    make_coastline_clip_path()
+)
+
+
+# ============================================================
+# RENDER MAP
+# ============================================================
+
+def render_map(
+    da,
+    cmap_name,
+    vmin,
+    vmax
+):
+
+    lat_dim, lon_dim = latlon(da)
+
+    lat = da[lat_dim].values
+    lon = da[lon_dim].values
+
+    data = da.values.astype(
+        float
+    )
+
+    fig = plt.figure(
+        figsize=(12, 5),
+        dpi=MAP_DPI,
+        facecolor="none"
+    )
+
+    ax = fig.add_axes(
+        [0, 0, 1, 1],
+        projection=PROJECTION
+    )
+
+    ax.set_extent(
+        [
+            LON_MIN,
+            LON_MAX,
+            LAT_MIN,
+            LAT_MAX
+        ],
+        crs=DATA_CRS
+    )
+
+    ax.patch.set_alpha(0)
+
+    # --------------------------------------------------------
+    # COLORMAP
+    # --------------------------------------------------------
+
+    cmap = plt.get_cmap(
+        cmap_name
+    ).copy()
+
+    cmap.set_bad(
+        alpha=0
+    )
+
+    norm = plt.Normalize(
+        vmin=vmin,
+        vmax=vmax
+    )
+
+    # --------------------------------------------------------
+    # RASTER
+    # --------------------------------------------------------
+
+    mesh = ax.pcolormesh(
+        lon,
+        lat,
+        data,
+        transform=DATA_CRS,
+        cmap=cmap,
+        norm=norm,
+        shading="nearest",
+        rasterized=True,
+        antialiased=False,
+        zorder=1
+    )
+
+    # --------------------------------------------------------
+    # AFRICA-ONLY CLIP
+    # --------------------------------------------------------
+
+    clip_transform = (
+        DATA_CRS._as_mpl_transform(
+            ax
+        )
+    )
+
+    clip_patch = PathPatch(
+        africa_clip_path,
+        transform=clip_transform,
+        facecolor="none",
+        edgecolor="none"
+    )
+
+    ax.add_patch(
+        clip_patch
+    )
+
+    mesh.set_clip_path(
+        clip_patch
+    )
+
+    # --------------------------------------------------------
+    # AFRICA COASTLINE
+    # --------------------------------------------------------
+
+    ax.add_geometries(
+        [africa_geometry],
+        crs=DATA_CRS,
+        facecolor="none",
+        edgecolor="gray",
+        linewidth=2.0,
+        antialiased=True,
+        zorder=10
+    )
+
+    # --------------------------------------------------------
+    # REMOVE MAP FRAME
+    # --------------------------------------------------------
+
+    ax.spines["geo"].set_visible(
+        False
+    )
+
+    # --------------------------------------------------------
+    # SAVE TRANSPARENT MAP
+    # --------------------------------------------------------
+
+    buffer = io.BytesIO()
+
+    fig.savefig(
+        buffer,
+        format="png",
+        dpi=MAP_DPI,
+        transparent=True,
+        facecolor="none",
+        edgecolor="none",
+        pad_inches=0
+    )
+
+    plt.close(fig)
+
+    buffer.seek(0)
+
+    image = Image.open(
+        buffer
+    ).convert("RGBA")
+
+    return image
+
+
+# ============================================================
+# RENDER MAPS
+# ============================================================
+
+maps = []
+
+for i, r in enumerate(top):
+
+    print(
+        f"Rendering variable {i + 1}/3..."
+    )
+
+    # --------------------------------------------------------
+    # FILE 1
+    # --------------------------------------------------------
+
+    data = r["da1"].values
+
+    finite = np.isfinite(data)
+
+    if np.any(finite):
+
+        vmin1 = np.nanmin(
+            data[finite]
+        )
+
+        vmax1 = np.nanmax(
+            data[finite]
+        )
+
+    else:
+
+        vmin1 = 0
+        vmax1 = 1
+
+    if vmin1 == vmax1:
+
+        vmax1 = vmin1 + 1e-12
+
+    img1 = render_map(
+        r["da1"],
+        "managua_r",
+        vmin1,
+        vmax1
+    )
+
+    # --------------------------------------------------------
+    # FILE 2
+    # --------------------------------------------------------
+
+    data = r["da2"].values
+
+    finite = np.isfinite(data)
+
+    if np.any(finite):
+
+        vmin2 = np.nanmin(
+            data[finite]
+        )
+
+        vmax2 = np.nanmax(
+            data[finite]
+        )
+
+    else:
+
+        vmin2 = 0
+        vmax2 = 1
+
+    if vmin2 == vmax2:
+
+        vmax2 = vmin2 + 1e-12
+
+    img2 = render_map(
+        r["da2"],
+        "managua_r",
+        vmin2,
+        vmax2
+    )
+
+    maps.append(
+        {
+            "file1": img1,
+            "file2": img2,
+            "v1": r["v1"],
+            "v2": r["v2"]
+        }
+    )
+
+
+# ============================================================
+# PREPARE IMAGE
+# ============================================================
+
+def prepare_image(
+    image
+):
+
+    image = image.convert(
+        "RGBA"
+    )
+
+    image = image.resize(
+        (
+            SHEET_W,
+            SHEET_H
+        ),
+        Image.Resampling.LANCZOS
+    )
+
+    return image
+
+
+# ============================================================
+# SLAB EDGE
+# ============================================================
+
+def make_slab_edge(
+    image
+):
+
+    edge = Image.new(
+        "RGBA",
+        image.size,
+        (
+            0,
+            0,
+            0,
+            0
+        )
+    )
+
+    dark = image.copy()
+
+    rgba = np.array(
+        dark
+    )
+
+    rgba[..., 0] = (
+        rgba[..., 0] * 0.42
+    ).astype(
+        np.uint8
+    )
+
+    rgba[..., 1] = (
+        rgba[..., 1] * 0.42
+    ).astype(
+        np.uint8
+    )
+
+    rgba[..., 2] = (
+        rgba[..., 2] * 0.42
+    ).astype(
+        np.uint8
+    )
+
+    dark = Image.fromarray(
+        rgba,
+        "RGBA"
+    )
+
+    for n in range(
+        SLAB_THICKNESS,
+        0,
+        -1
+    ):
+
+        edge.alpha_composite(
+            dark,
+            (
+                n * SLAB_DX
+                // SLAB_THICKNESS,
+
+                n * SLAB_DY
+                // SLAB_THICKNESS
+            )
+        )
+
+    return edge
+
+
+# ============================================================
+# FINAL CANVAS
+# ============================================================
+
+canvas = Image.new(
+    "RGBA",
+    (
+        FIG_W,
+        FIG_H
+    ),
+    (
+        255,
+        255,
+        255,
+        255
+    )
+)
+
+
+# ============================================================
+# TWO FILE STACKS — VERTICAL
+# ============================================================
+
+stack_x = FIG_W // 2
+
+file1_start_y = 210
+
+file2_start_y = (
+    file1_start_y
+    + 3 * LAYER_SPACING
+    + FILE_STACK_GAP
+)
+
+
+# ============================================================
+# DRAW ONE VERTICAL STACK
+# ============================================================
+
+def draw_stack(
+    key,
+    start_y
+):
+
+    for i in range(
+        len(maps) - 1,
+        -1,
+        -1
+    ):
+
+        image = prepare_image(
+            maps[i][key]
+        )
+
+        # ----------------------------------------------------
+        # MAP LATERAL OFFSET
+        # ----------------------------------------------------
+
+        x_offset = (
+            i - 1
+        ) * LAYER_OFFSET_X
+
+        x = int(
+            stack_x
+            - SHEET_W / 2
+            + x_offset
+        )
+
+        y = int(
+            start_y
+            + i * LAYER_SPACING
+        )
+
+        # ----------------------------------------------------
+        # SLAB
+        # ----------------------------------------------------
+
+        edge = make_slab_edge(
+            image
+        )
+
+        canvas.alpha_composite(
+            edge,
+            (
+                x,
+                y
+            )
+        )
+
+        # ----------------------------------------------------
+        # MAP
+        # ----------------------------------------------------
+
+        canvas.alpha_composite(
+            image,
+            (
+                x,
+                y
+            )
+        )
+
+
+# ============================================================
+# DRAW FILE 1
+# ============================================================
+
+draw_stack(
+    "file1",
+    file1_start_y
+)
+
+
+# ============================================================
+# DRAW FILE 2
+# ============================================================
+
+draw_stack(
+    "file2",
+    file2_start_y
+)
+
+
+# ============================================================
+# VARIABLE LABELS
+#
+# Labels use:
+#
+#   LAYER_OFFSET_X  -> same lateral displacement as maps
+#   LABEL_OFFSET_X  -> independent overall label movement
+#   LABEL_GAP       -> distance from map edge
+#
+# Text automatically wraps to the available space.
+# ============================================================
+
+draw = ImageDraw.Draw(
+    canvas
+)
+
+try:
+
+    label_font = ImageFont.truetype(
+        "/System/Library/Fonts/Helvetica.ttc",
+        LABEL_FONT_SIZE
+    )
+
+except:
+
+    label_font = ImageFont.load_default()
+
+
+# ============================================================
+# WRAP TEXT BY PIXEL WIDTH
+# ============================================================
+
+def wrap_text_pixels(
+    text,
+    font,
+    max_width
+):
+
+    words = text.split()
+
+    lines = []
+
+    current_line = ""
+
+    for word in words:
+
+        if current_line:
+
+            test_line = (
+                current_line
+                + " "
+                + word
+            )
+
+        else:
+
+            test_line = word
+
+        bbox = draw.textbbox(
+            (0, 0),
+            test_line,
+            font=font
+        )
+
+        width = (
+            bbox[2]
+            - bbox[0]
+        )
+
+        if width <= max_width:
+
+            current_line = test_line
+
+        else:
+
+            if current_line:
+
+                lines.append(
+                    current_line
+                )
+
+            current_line = word
+
+    if current_line:
+
+        lines.append(
+            current_line
+        )
+
+    return lines
+
+
+# ============================================================
+# DRAW LABELS
+# ============================================================
+
+for i, m in enumerate(maps):
+
+    # --------------------------------------------------------
+    # EXACT SAME LAYER OFFSET AS MAP
+    # --------------------------------------------------------
+
+    x_offset = (
+        i - 1
+    ) * LAYER_OFFSET_X
+
+    map_x = int(
+        stack_x
+        - SHEET_W / 2
+        + x_offset
+    )
+
+    map_y = int(
+        file1_start_y
+        + i * LAYER_SPACING
+    )
+
+    # --------------------------------------------------------
+    # LABEL X POSITION
+    # --------------------------------------------------------
+    #
+    # LAYER_OFFSET_X controls relative layer placement.
+    #
+    # LABEL_GAP controls distance from map edge.
+    #
+    # LABEL_OFFSET_X independently moves ALL labels.
+    # --------------------------------------------------------
+
+    label_x = int(
+        map_x
+        + SHEET_W
+        + LABEL_GAP
+        + LABEL_OFFSET_X
+    )
+
+    # --------------------------------------------------------
+    # AVAILABLE WIDTH TO RIGHT EDGE
+    # --------------------------------------------------------
+
+    max_label_width = (
+        FIG_W
+        - LABEL_RIGHT_MARGIN
+        - label_x
+    )
+
+    # --------------------------------------------------------
+    # If a label would start beyond the canvas, clamp it.
+    # --------------------------------------------------------
+
+    if label_x >= (
+        FIG_W
+        - LABEL_RIGHT_MARGIN
+    ):
+
+        label_x = (
+            FIG_W
+            - LABEL_RIGHT_MARGIN
+            - 1
+        )
+
+    max_label_width = max(
+        max_label_width,
+        120
+    )
+
+    # --------------------------------------------------------
+    # GET LABEL
+    # --------------------------------------------------------
+
+    label = get_long_name(
+        m["v2"]
+    )
+
+    # --------------------------------------------------------
+    # WRAP
+    # --------------------------------------------------------
+
+    lines = wrap_text_pixels(
+        label,
+        label_font,
+        max_label_width
+    )
+
+    # --------------------------------------------------------
+    # LINE HEIGHT
+    # --------------------------------------------------------
+
+    sample_bbox = draw.textbbox(
+        (0, 0),
+        "Ag",
+        font=label_font
+    )
+
+    line_height = (
+        sample_bbox[3]
+        - sample_bbox[1]
+    )
+
+    total_text_height = (
+        len(lines)
+        * line_height
+        +
+        (len(lines) - 1)
+        * LABEL_LINE_SPACING
+    )
+
+    # --------------------------------------------------------
+    # CENTER LABEL VERTICALLY ON MAP
+    # --------------------------------------------------------
+
+    label_y = int(
+        map_y
+        + SHEET_H / 2
+        - total_text_height / 2
+    )
+
+    # --------------------------------------------------------
+    # DRAW EACH LINE
+    # --------------------------------------------------------
+
+    for line in lines:
+
+        draw.text(
+            (
+                label_x,
+                label_y
+            ),
+            line,
+            fill="black",
+            font=label_font
+        )
+
+        bbox = draw.textbbox(
+            (0, 0),
+            line,
+            font=label_font
+        )
+
+        actual_height = (
+            bbox[3]
+            - bbox[1]
+        )
+
+        label_y += (
+            actual_height
+            + LABEL_LINE_SPACING
+        )
+
+
+# ============================================================
+# SAVE
+# ============================================================
+
+output_path = (
+    "/Users/jae35/Desktop/"
+    "top3_africa_VERTICAL_laterally_offset.png"
+)
+
+canvas.convert(
+    "RGB"
+).save(
+    output_path,
+    dpi=(
+        SAVE_DPI,
+        SAVE_DPI
+    ),
+    quality=100
+)
+
+
+# ============================================================
+# SHOW
+# ============================================================
+
+canvas.show()
+
+
+# ============================================================
+# CLOSE DATASETS
+# ============================================================
+
+ds1.close()
+ds2.close()
+
+
+# ============================================================
+# DONE
+# ============================================================
+
+print()
+print("=" * 80)
+print("DONE")
+print("=" * 80)
+print("Africa-only mask applied.")
+print("Middle East excluded.")
+print(f"Label font size: {LABEL_FONT_SIZE}")
+print(f"Label gap: {LABEL_GAP}")
+print(f"Label offset X: {LABEL_OFFSET_X}")
+print(f"Layer offset X: {LAYER_OFFSET_X}")
+print("Labels wrapped to stay within the canvas.")
+print(output_path)

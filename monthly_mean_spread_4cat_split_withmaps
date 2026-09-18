@@ -41,6 +41,8 @@ scale_folder = (
 
 variable = "fch4_wetl"
 
+# TEST TEST TEST
+
 
 # =========================================================
 # Q10 SETTINGS
@@ -3392,30 +3394,24 @@ print(
 
 
 # =========================================================
-# SAVE
+# SAVE FIGURE TO DESKTOP
 # =========================================================
 
-output_directory = (
-    directory
-    / scale_folder
-)
+desktop_directory = Path.home() / "Desktop"
 
-
-output_directory.mkdir(
+desktop_directory.mkdir(
     parents=True,
     exist_ok=True
 )
 
-
 output_file = (
-    output_directory
+    desktop_directory
     / (
         "monthly_mean_soilmap_plantmode_2x2_"
         "substrate_ensemble_filled_with_"
         "Mar_Sep_maps_Q10_2_3_4.png"
     )
 )
-
 
 fig.savefig(
     output_file,
@@ -3425,11 +3421,23 @@ fig.savefig(
     facecolor="white"
 )
 
-
 print()
 print(
     "==============================================="
 )
+
+print(
+    "Saved figure to Desktop:"
+)
+
+print(
+    output_file
+)
+
+print(
+    "==============================================="
+)
+
 
 print(
     "Saved:"

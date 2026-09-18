@@ -1,0 +1,1625 @@
+import os
+import calendar
+
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+
+import dataOPS
+import readJULES
+
+
+# =============================================================
+# USER SETTINGS
+# =============================================================
+
+suite_dir = "/Users/jae35/Desktop/JULES_test_data/test/u-dk105_0100"
+
+file_name = "CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2005.nc"
+
+year = 2005
+
+
+# =============================================================
+# VARIABLES
+# =============================================================
+
+VARIABLES = {
+    "NPP": "npp_gb",
+    "Soil respiration": "resp_s_to_atmos_gb",
+    "Soil carbon": "cs_gb",
+}
+
+
+# =============================================================
+# COLOUR MAPS
+# =============================================================
+
+COLORMAPS = {
+    "NPP": "Greens",
+    "Soil respiration": "Blues",
+    "Soil carbon": "YlOrBr",
+}
+
+
+# =============================================================
+# OPTIONAL LATITUDE LIMIT
+# =============================================================
+
+latitude_bounds = None
+
+
+# =============================================================
+# MONTHS TO PLOT
+# =============================================================
+
+MONTHS = [
+    3,
+    6,
+    9,
+    12,
+]
+
+
+# =============================================================
+# GLOBAL MATPLOTLIB SETTINGS
+# =============================================================
+
+plt.rcParams.update({
+    "axes.grid": False,
+
+    "xtick.bottom": False,
+    "xtick.top": False,
+    "xtick.labelbottom": False,
+    "xtick.labeltop": False,
+
+    "ytick.left": False,
+    "ytick.right": False,
+    "ytick.labelleft": False,
+    "ytick.labelright": False,
+})
+
+
+# =============================================================
+# CLEAN CARTOPY AXIS
+# =============================================================
+
+def clean_map_axis(ax):
+
+    try:
+        ax.spines["geo"].set_visible(False)
+    except Exception:
+        pass
+
+    try:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    except Exception:
+        pass
+
+    ax.tick_params(
+        axis="both",
+        which="both",
+        bottom=False,
+        top=False,
+        left=False,
+        right=False,
+        labelbottom=False,
+        labeltop=False,
+        labelleft=False,
+        labelright=False,
+        length=0,
+        width=0,
+    )
+
+    try:
+        ax.grid(
+            False,
+            which="both",
+            axis="both",
+        )
+    except Exception:
+        pass
+
+    try:
+
+        for child in list(ax.get_children()):
+
+            if child.__class__.__name__ == "Gridliner":
+
+                try:
+                    child.set_visible(False)
+                except Exception:
+                    pass
+
+    except Exception:
+        pass
+
+
+# =============================================================
+# FIND JULES FILE
+# =============================================================
+
+def find_jules_file(
+        suite_dir,
+        file_name):
+
+    path = os.path.join(
+        suite_dir,
+        file_name
+    )
+
+    if os.path.isfile(path):
+
+        return path
+
+    raise FileNotFoundError(
+        f"Could not find JULES file:\n{path}"
+    )
+
+
+# =============================================================
+# IDENTIFY LAT/LON
+# =============================================================
+
+def identify_lat_lon(header):
+
+    dimension_keys = list(header[0])
+    variable_keys = list(header[1])
+
+    if (
+        "latitude" in variable_keys
+        and
+        "longitude" in variable_keys
+    ):
+
+        lat_string = "latitude"
+        lon_string = "longitude"
+
+    elif (
+        "lat" in variable_keys
+        and
+        "lon" in variable_keys
+    ):
+
+        lat_string = "lat"
+        lon_string = "lon"
+
+    else:
+
+        raise ValueError(
+            "Could not identify latitude/longitude variables.\n"
+            f"Variables found: {variable_keys}"
+        )
+
+    if (
+        "lat" in dimension_keys
+        and
+        "lon" in dimension_keys
+    ):
+
+        lat_key = "lat"
+        lon_key = "lon"
+
+    elif (
+        "y" in dimension_keys
+        and
+        "x" in dimension_keys
+    ):
+
+        lat_key = "y"
+        lon_key = "x"
+
+    else:
+
+        raise ValueError(
+            "Could not identify latitude/longitude dimensions.\n"
+            f"Dimensions found: {dimension_keys}"
+        )
+
+    return (
+        lat_string,
+        lon_string,
+        lat_key,
+        lon_key,
+        variable_keys,
+    )
+
+
+# =============================================================
+# CONSTRUCT GRID
+# =============================================================
+
+def construct_grid(
+        lats,
+        lons,
+        latitude_bounds=None):
+
+    lats_flat_full = np.asarray(
+        lats
+    ).flatten()
+
+    lons_flat_full = np.asarray(
+        lons
+    ).flatten()
+
+    if lats_flat_full.size != lons_flat_full.size:
+
+        raise ValueError(
+            "Latitude and longitude arrays contain "
+            "different numbers of points."
+        )
+
+    if latitude_bounds is not None:
+
+        lat_min, lat_max = latitude_bounds
+
+        lat_mask = (
+            (lats_flat_full >= lat_min)
+            &
+            (lats_flat_full <= lat_max)
+        )
+
+        if not np.any(lat_mask):
+
+            raise ValueError(
+                f"No latitude points found between "
+                f"{lat_min} and {lat_max}"
+            )
+
+    else:
+
+        lat_mask = np.ones(
+            lats_flat_full.shape,
+            dtype=bool
+        )
+
+    lats_flat = (
+        lats_flat_full[
+            lat_mask
+        ]
+    )
+
+    lons_flat = (
+        lons_flat_full[
+            lat_mask
+        ]
+    )
+
+    lats_unique = np.sort(
+        np.unique(
+            lats_flat
+        )
+    )
+
+    lons_unique = np.sort(
+        np.unique(
+            lons_flat
+        )
+    )
+
+    if len(lats_unique) < 2:
+
+        raise ValueError(
+            "Not enough unique latitude points "
+            "to construct a grid."
+        )
+
+    if len(lons_unique) < 2:
+
+        raise ValueError(
+            "Not enough unique longitude points "
+            "to construct a grid."
+        )
+
+    dlat = np.median(
+        np.diff(
+            lats_unique
+        )
+    )
+
+    dlon = np.median(
+        np.diff(
+            lons_unique
+        )
+    )
+
+    if dlat <= 0 or dlon <= 0:
+
+        raise ValueError(
+            "Could not determine positive grid spacing."
+        )
+
+    lat_grid = np.arange(
+        lats_unique.min(),
+        lats_unique.max() + dlat / 2,
+        dlat
+    )
+
+    lon_grid = np.arange(
+        lons_unique.min(),
+        lons_unique.max() + dlon / 2,
+        dlon
+    )
+
+    Ny = len(
+        lat_grid
+    )
+
+    Nx = len(
+        lon_grid
+    )
+
+    lat_idx = (
+        (
+            lats_flat
+            -
+            lat_grid[0]
+        )
+        /
+        dlat
+    ).round().astype(int)
+
+    lon_idx = (
+        (
+            lons_flat
+            -
+            lon_grid[0]
+        )
+        /
+        dlon
+    ).round().astype(int)
+
+    if (
+        np.any(lat_idx < 0)
+        or
+        np.any(lat_idx >= Ny)
+    ):
+
+        raise ValueError(
+            "Latitude indices fall outside inferred grid."
+        )
+
+    if (
+        np.any(lon_idx < 0)
+        or
+        np.any(lon_idx >= Nx)
+    ):
+
+        raise ValueError(
+            "Longitude indices fall outside inferred grid."
+        )
+
+    lat2d, lon2d = np.meshgrid(
+        lat_grid,
+        lon_grid,
+        indexing="ij"
+    )
+
+    return (
+        lat_mask,
+        lat_idx,
+        lon_idx,
+        lat2d,
+        lon2d,
+        Ny,
+        Nx,
+    )
+
+
+# =============================================================
+# CONVERT TO NUMPY
+# =============================================================
+
+def convert_to_numpy(
+        variable_array):
+
+    if isinstance(
+        variable_array,
+        np.ndarray
+    ):
+
+        return variable_array
+
+    if isinstance(
+        variable_array,
+        np.ma.MaskedArray
+    ):
+
+        return np.asarray(
+            variable_array.filled(
+                np.nan
+            )
+        )
+
+    for attribute in (
+        "data",
+        "values",
+        "array",
+        "value",
+    ):
+
+        if hasattr(
+            variable_array,
+            attribute
+        ):
+
+            candidate = getattr(
+                variable_array,
+                attribute
+            )
+
+            try:
+
+                candidate = (
+                    candidate()
+                    if callable(candidate)
+                    else candidate
+                )
+
+                return np.asarray(
+                    candidate
+                )
+
+            except Exception:
+                pass
+
+    try:
+
+        return np.asarray(
+            variable_array
+        )
+
+    except Exception as exc:
+
+        raise TypeError(
+            "Could not convert variable returned by "
+            "readJULES.read_jules_m2() to a numpy array.\n"
+            f"Object type: {type(variable_array)}"
+        ) from exc
+
+
+# =============================================================
+# READ AND GRID VARIABLE
+# =============================================================
+
+def read_and_grid_variable(
+        file_path,
+        variable_name,
+        lat_key,
+        lon_key,
+        lat_mask,
+        lat_idx,
+        lon_idx,
+        Ny,
+        Nx):
+
+    print()
+    print(
+        f"Reading variable: {variable_name}"
+    )
+
+    (
+        variable_array,
+        variable_unit,
+        variable_long_name,
+        variable_dims
+    ) = readJULES.read_jules_m2(
+        file_path,
+        variable_name
+    )
+
+    variable_array = convert_to_numpy(
+        variable_array
+    )
+
+    variable_array = (
+        dataOPS.sanitize_extreme_values(
+            variable_array
+        )
+    )
+
+    variable_array = convert_to_numpy(
+        variable_array
+    )
+
+    print(
+        "Original shape:",
+        variable_array.shape
+    )
+
+    print(
+        "Dimensions:",
+        variable_dims
+    )
+
+    lat_axis = (
+        variable_dims.index(
+            lat_key
+        )
+        if lat_key in variable_dims
+        else None
+    )
+
+    lon_axis = (
+        variable_dims.index(
+            lon_key
+        )
+        if lon_key in variable_dims
+        else None
+    )
+
+    if lat_axis is None:
+
+        raise ValueError(
+            f"Could not find latitude dimension "
+            f"'{lat_key}' in {variable_dims}"
+        )
+
+    if lon_axis is None:
+
+        raise ValueError(
+            f"Could not find longitude dimension "
+            f"'{lon_key}' in {variable_dims}"
+        )
+
+    other_axes = [
+        i
+        for i in range(
+            variable_array.ndim
+        )
+        if i not in (
+            lat_axis,
+            lon_axis
+        )
+    ]
+
+    transpose_order = (
+        other_axes
+        +
+        [
+            lat_axis,
+            lon_axis
+        ]
+    )
+
+    variable_array = np.transpose(
+        variable_array,
+        axes=transpose_order
+    )
+
+    print(
+        "Reordered shape:",
+        variable_array.shape
+    )
+
+    n_spatial = (
+        variable_array.shape[-2]
+        *
+        variable_array.shape[-1]
+    )
+
+    expected_spatial = (
+        lat_mask.size
+    )
+
+    if n_spatial != expected_spatial:
+
+        raise ValueError(
+            f"Mismatch for {variable_name}:\n"
+            f"  Variable spatial points = {n_spatial}\n"
+            f"  Coordinate points = {expected_spatial}\n"
+            f"  Variable shape = {variable_array.shape}"
+        )
+
+    extra_shape = (
+        variable_array.shape[:-2]
+    )
+
+    gridded = np.full(
+        extra_shape + (
+            Ny,
+            Nx
+        ),
+        np.nan,
+        dtype=float
+    )
+
+    if extra_shape:
+
+        iterator = np.ndindex(
+            extra_shape
+        )
+
+    else:
+
+        iterator = [
+            ()
+        ]
+
+    for idx in iterator:
+
+        values = variable_array[
+            idx
+        ].flatten()
+
+        if values.size != lat_mask.size:
+
+            raise ValueError(
+                f"Spatial mismatch for {variable_name}.\n"
+                f"  Values: {values.size}\n"
+                f"  Coordinates: {lat_mask.size}"
+            )
+
+        values = values[
+            lat_mask
+        ]
+
+        gridded[
+            idx
+            +
+            (
+                lat_idx,
+                lon_idx
+            )
+        ] = values
+
+    print(
+        "Gridded shape:",
+        gridded.shape
+    )
+
+    return (
+        gridded,
+        variable_unit,
+        variable_long_name,
+        variable_dims,
+    )
+
+
+# =============================================================
+# EXTRACT MONTHLY DATA
+# =============================================================
+
+def extract_monthly_maps(
+        gridded,
+        variable_dims,
+        times,
+        requested_months):
+
+    gridded = convert_to_numpy(
+        gridded
+    )
+
+    if gridded.ndim == 2:
+
+        return {
+            month: np.array(
+                gridded,
+                dtype=float,
+                copy=True
+            )
+            for month in requested_months
+        }
+
+    time_axis = None
+
+    if "time" in variable_dims:
+
+        original_time_axis = variable_dims.index(
+            "time"
+        )
+
+        spatial_axes = [
+            variable_dims.index("lat")
+            if "lat" in variable_dims
+            else variable_dims.index("y")
+            if "y" in variable_dims
+            else None,
+
+            variable_dims.index("lon")
+            if "lon" in variable_dims
+            else variable_dims.index("x")
+            if "x" in variable_dims
+            else None,
+        ]
+
+        other_axes_original = [
+            i
+            for i in range(
+                len(variable_dims)
+            )
+            if i not in spatial_axes
+        ]
+
+        if original_time_axis in other_axes_original:
+
+            time_axis = (
+                other_axes_original.index(
+                    original_time_axis
+                )
+            )
+
+    if time_axis is None:
+
+        time_axis = 0
+
+    times = dataOPS.ensure_np_datetime(
+        times
+    )
+
+    monthly = {}
+
+    for month in requested_months:
+
+        month_indices = np.where(
+            (
+                np.array(
+                    [
+                        t.astype(
+                            "datetime64[M]"
+                        )
+                        for t in times
+                    ]
+                )
+                ==
+                np.datetime64(
+                    f"{year}-{month:02d}"
+                )
+            )
+        )[0]
+
+        if len(month_indices) == 0:
+
+            print(
+                f"WARNING: No data found for "
+                f"{calendar.month_name[month]}."
+            )
+
+            monthly[
+                month
+            ] = None
+
+            continue
+
+        selected = np.take(
+            gridded,
+            month_indices,
+            axis=time_axis
+        )
+
+        if selected.ndim > 3:
+
+            selected = np.nanmean(
+                selected,
+                axis=tuple(
+                    range(
+                        0,
+                        selected.ndim - 2
+                    )
+                )
+            )
+
+        elif selected.ndim == 3:
+
+            selected = np.nanmean(
+                selected,
+                axis=0
+            )
+
+        monthly[
+            month
+        ] = selected
+
+        print(
+            f"{calendar.month_name[month]}:",
+            len(month_indices),
+            "time points"
+        )
+
+    return monthly
+
+
+# =============================================================
+# BASE MAP
+# =============================================================
+
+def setup_map(
+        ax):
+
+    ax.set_extent(
+        [
+            -180,
+            180,
+            -65,
+            65
+        ],
+        crs=ccrs.PlateCarree()
+    )
+
+    clean_map_axis(
+        ax
+    )
+
+    ax.add_feature(
+        cfeature.LAND,
+        facecolor="#f5e6c8",
+        edgecolor="none",
+        linewidth=0,
+        zorder=1
+    )
+
+    ax.add_feature(
+        cfeature.OCEAN,
+        facecolor="white",
+        edgecolor="none",
+        linewidth=0,
+        zorder=1
+    )
+
+    ax.add_feature(
+        cfeature.LAKES,
+        facecolor="#a6cee3",
+        edgecolor="none",
+        linewidth=0,
+        zorder=1
+    )
+
+    ax.add_feature(
+        cfeature.RIVERS.with_scale(
+            "50m"
+        ),
+        edgecolor="blue",
+        linewidth=0.5,
+        zorder=2
+    )
+
+    ax.add_feature(
+        cfeature.BORDERS.with_scale(
+            "50m"
+        ),
+        edgecolor="gray",
+        linewidth=1.2,
+        alpha=0.3,
+        zorder=4
+    )
+
+    ax.coastlines(
+        resolution="50m",
+        linewidth=1.0,
+        zorder=5
+    )
+
+    clean_map_axis(
+        ax
+    )
+
+
+# =============================================================
+# ALPHA-BLENDED COLOURMAP
+# =============================================================
+
+def make_alpha_colormap(
+        cmap_name):
+
+    base_cmap = plt.get_cmap(
+        cmap_name
+    )
+
+    N = 256
+
+    colors = base_cmap(
+        np.linspace(
+            0,
+            1,
+            N
+        )
+    )
+
+    colors[
+        :,
+        -1
+    ] = np.linspace(
+        0,
+        1,
+        N
+    )
+
+    return (
+        mcolors.ListedColormap(
+            colors
+        )
+    )
+
+
+# =============================================================
+# PLOT ONE MONTH
+# =============================================================
+
+def plot_month(
+        ax,
+        lat2d,
+        lon2d,
+        data,
+        cmap_name,
+        vmin,
+        vmax):
+
+    if data is None:
+
+        return
+
+    data = convert_to_numpy(
+        data
+    )
+
+    while data.ndim > 2:
+
+        data = np.nanmean(
+            data,
+            axis=0
+        )
+
+    if data.ndim != 2:
+
+        raise ValueError(
+            f"Expected 2D map but received "
+            f"shape {data.shape}"
+        )
+
+    norm = mcolors.Normalize(
+        vmin=vmin,
+        vmax=vmax
+    )
+
+    alpha_cmap = make_alpha_colormap(
+        cmap_name
+    )
+
+    rgba_colors = alpha_cmap(
+        norm(data)
+    )
+
+    finite = np.isfinite(
+        data
+    )
+
+    rgba_colors[
+        ...,
+        -1
+    ] = np.where(
+        finite,
+        np.clip(
+            norm(data),
+            0,
+            1
+        ),
+        0
+    )
+
+    ax.pcolormesh(
+        lon2d,
+        lat2d,
+        rgba_colors,
+        shading="nearest",
+        antialiased=False,
+        edgecolors="none",
+        linewidth=0,
+        rasterized=True,
+        transform=ccrs.PlateCarree(),
+        zorder=3
+    )
+
+    ax.add_feature(
+        cfeature.OCEAN,
+        facecolor="white",
+        edgecolor="none",
+        linewidth=0,
+        zorder=6,
+        alpha=1.0
+    )
+
+
+# =============================================================
+# COLOURBAR
+# =============================================================
+
+def add_alpha_colorbar(
+        fig,
+        cmap_name,
+        vmin,
+        vmax,
+        variable_unit):
+
+    norm = mcolors.Normalize(
+        vmin=vmin,
+        vmax=vmax
+    )
+
+    alpha_cmap = make_alpha_colormap(
+        cmap_name
+    )
+
+    sm = cm.ScalarMappable(
+        cmap=alpha_cmap,
+        norm=norm
+    )
+
+    sm.set_array([])
+
+    # =========================================================
+    # COMPACT COLOURBAR POSITION
+    # =========================================================
+
+    cbar_ax = fig.add_axes(
+        [
+            0.895,
+            0.29,
+            0.018,
+            0.42
+        ]
+    )
+
+    cbar_ax.add_patch(
+        plt.Rectangle(
+            (0, 0),
+            1,
+            1,
+            transform=cbar_ax.transAxes,
+            color="#f5e6c8",
+            alpha=0.5,
+            zorder=0
+        )
+    )
+
+    cb = fig.colorbar(
+        sm,
+        cax=cbar_ax,
+        orientation="vertical"
+    )
+
+    cb.set_label(
+        dataOPS.cleanup_exponents(
+            variable_unit
+        ),
+        fontsize=18,
+        labelpad=12
+    )
+
+    cb.ax.tick_params(
+        labelsize=13
+    )
+
+    return cb
+
+
+# =============================================================
+# SEASONAL PANEL
+# =============================================================
+
+def make_seasonal_panel(
+        lat2d,
+        lon2d,
+        monthly_data,
+        display_name,
+        variable_unit,
+        variable_long_name):
+
+    print()
+    print(
+        "Creating panel:",
+        display_name
+    )
+
+    # =========================================================
+    # FINITE VALUES
+    # =========================================================
+
+    all_values = []
+
+    for month in MONTHS:
+
+        month_data = monthly_data.get(
+            month
+        )
+
+        if month_data is None:
+            continue
+
+        month_data = convert_to_numpy(
+            month_data
+        )
+
+        finite = month_data[
+            np.isfinite(
+                month_data
+            )
+        ]
+
+        if finite.size:
+
+            all_values.append(
+                finite
+            )
+
+    if not all_values:
+
+        raise ValueError(
+            f"No finite data available for "
+            f"{display_name}."
+        )
+
+    all_values = np.concatenate(
+        all_values
+    )
+
+    vmin = np.nanmin(
+        all_values
+    )
+
+    vmax = np.nanmax(
+        all_values
+    )
+
+    if np.isclose(
+        vmin,
+        vmax
+    ):
+
+        vmax = vmin + 1.0
+
+    print(
+        display_name,
+        "range:",
+        vmin,
+        "to",
+        vmax
+    )
+
+    cmap_name = COLORMAPS[
+        display_name
+    ]
+
+    # =========================================================
+    # FIGURE
+    # =========================================================
+    #
+    # Smaller figure than the previous version.
+    # The panels occupy almost the entire canvas.
+    #
+    # =========================================================
+
+    fig, axes = plt.subplots(
+        2,
+        2,
+        figsize=(12, 6.4),
+        subplot_kw={
+            "projection": ccrs.PlateCarree(
+                central_longitude=25
+            )
+        }
+    )
+
+    axes = axes.flatten()
+
+    positions = {
+        3: 0,
+        6: 1,
+        9: 2,
+        12: 3,
+    }
+
+    # =========================================================
+    # PLOT MONTHS
+    # =========================================================
+
+    for month in MONTHS:
+
+        ax = axes[
+            positions[month]
+        ]
+
+        setup_map(
+            ax
+        )
+
+        plot_month(
+            ax,
+            lat2d,
+            lon2d,
+            monthly_data.get(month),
+            cmap_name,
+            vmin,
+            vmax
+        )
+
+        ax.set_title(
+            calendar.month_name[month],
+            fontsize=18,
+            fontstyle="italic",
+            loc="center",
+            pad=3
+        )
+
+        clean_map_axis(
+            ax
+        )
+
+    # =========================================================
+    # COLOURBAR
+    # =========================================================
+
+    add_alpha_colorbar(
+        fig,
+        cmap_name,
+        vmin,
+        vmax,
+        variable_unit
+    )
+
+    # =========================================================
+    # FIGURE TITLE
+    # =========================================================
+
+    fig.suptitle(
+        display_name,
+        fontsize=22,
+        fontstyle="italic",
+        x=0.47,
+        y=0.985
+    )
+
+    # =========================================================
+    # TIGHT LAYOUT
+    # =========================================================
+
+    plt.subplots_adjust(
+        left=0.015,
+        right=0.875,
+        top=0.91,
+        bottom=0.025,
+        wspace=0.005,
+        hspace=0.015
+    )
+
+    # =========================================================
+    # FINAL CLEAN
+    # =========================================================
+
+    for ax in axes:
+
+        clean_map_axis(
+            ax
+        )
+
+    return fig
+
+
+# =============================================================
+# MAIN
+# =============================================================
+
+def make_three_variable_seasonal_maps():
+
+    # =========================================================
+    # INPUT
+    # =========================================================
+
+    file_path = find_jules_file(
+        suite_dir,
+        file_name
+    )
+
+    print()
+    print(
+        "Suite directory:"
+    )
+
+    print(
+        suite_dir
+    )
+
+    print()
+    print(
+        "Input file:"
+    )
+
+    print(
+        file_path
+    )
+
+    # =========================================================
+    # TIME
+    # =========================================================
+
+    (
+        times,
+        times_unit,
+        times_long_name,
+        times_dims
+    ) = readJULES.read_jules_m2(
+        file_path,
+        "time"
+    )
+
+    times = dataOPS.ensure_np_datetime(
+        times
+    )
+
+    year_indices = np.where(
+        (
+            times
+            >=
+            np.datetime64(
+                f"{year}-01-01"
+            )
+        )
+        &
+        (
+            times
+            <
+            np.datetime64(
+                f"{year + 1}-01-01"
+            )
+        )
+    )[0]
+
+    if len(year_indices) == 0:
+
+        raise ValueError(
+            f"No time points found for {year}."
+        )
+
+    print()
+    print(
+        f"Found {len(year_indices)} "
+        f"time points for {year}."
+    )
+
+    times_year = times[
+        year_indices
+    ]
+
+    # =========================================================
+    # HEADER
+    # =========================================================
+
+    header = readJULES.read_jules_header(
+        file_path
+    )
+
+    (
+        lat_string,
+        lon_string,
+        lat_key,
+        lon_key,
+        variable_keys,
+    ) = identify_lat_lon(
+        header
+    )
+
+    # =========================================================
+    # CHECK VARIABLES
+    # =========================================================
+
+    print()
+    print(
+        "Requested variables:"
+    )
+
+    for display_name, variable_name in VARIABLES.items():
+
+        print(
+            f"  {display_name}: {variable_name}"
+        )
+
+        if variable_name not in variable_keys:
+
+            raise ValueError(
+                f"Variable '{variable_name}' "
+                f"for '{display_name}' was not found.\n\n"
+                f"Available variables:\n"
+                +
+                "\n".join(
+                    f"  {v}"
+                    for v in variable_keys
+                )
+            )
+
+    # =========================================================
+    # LAT/LON
+    # =========================================================
+
+    (
+        lats,
+        lats_units,
+        lats_long_name,
+        lats_dims
+    ) = readJULES.read_jules_m2(
+        file_path,
+        lat_string
+    )
+
+    (
+        lons,
+        lons_units,
+        lons_long_name,
+        lons_dims
+    ) = readJULES.read_jules_m2(
+        file_path,
+        lon_string
+    )
+
+    # =========================================================
+    # GRID
+    # =========================================================
+
+    (
+        lat_mask,
+        lat_idx,
+        lon_idx,
+        lat2d,
+        lon2d,
+        Ny,
+        Nx,
+    ) = construct_grid(
+        lats,
+        lons,
+        latitude_bounds
+    )
+
+    print()
+    print(
+        "Grid:",
+        Ny,
+        "x",
+        Nx
+    )
+
+    # =========================================================
+    # READ VARIABLES
+    # =========================================================
+
+    all_monthly_data = {}
+
+    variable_metadata = {}
+
+    for display_name, variable_name in VARIABLES.items():
+
+        (
+            gridded,
+            variable_unit,
+            variable_long_name,
+            variable_dims
+        ) = read_and_grid_variable(
+            file_path,
+            variable_name,
+            lat_key,
+            lon_key,
+            lat_mask,
+            lat_idx,
+            lon_idx,
+            Ny,
+            Nx
+        )
+
+        # -----------------------------------------------------
+        # Select only requested year
+        # -----------------------------------------------------
+
+        if "time" in variable_dims:
+
+            spatial_names = {
+                lat_key,
+                lon_key
+            }
+
+            extra_dimension_names = [
+                d
+                for d in variable_dims
+                if d not in spatial_names
+            ]
+
+            time_position = (
+                extra_dimension_names.index(
+                    "time"
+                )
+            )
+
+            gridded = np.take(
+                gridded,
+                year_indices,
+                axis=time_position
+            )
+
+            gridded_dims = [
+                d
+                for d in variable_dims
+                if d not in spatial_names
+            ] + [
+                lat_key,
+                lon_key
+            ]
+
+        else:
+
+            gridded_dims = [
+                d
+                for d in variable_dims
+                if d not in {
+                    lat_key,
+                    lon_key
+                }
+            ] + [
+                lat_key,
+                lon_key
+            ]
+
+        # =====================================================
+        # MONTHLY EXTRACTION
+        # =====================================================
+
+        monthly_data = extract_monthly_maps(
+            gridded,
+            gridded_dims,
+            times_year,
+            MONTHS
+        )
+
+        all_monthly_data[
+            display_name
+        ] = monthly_data
+
+        variable_metadata[
+            display_name
+        ] = {
+            "unit": variable_unit,
+            "long_name": variable_long_name,
+            "variable_name": variable_name,
+        }
+
+    # =========================================================
+    # CREATE THREE FIGURES
+    # =========================================================
+
+    figures = []
+
+    for display_name in VARIABLES:
+
+        info = variable_metadata[
+            display_name
+        ]
+
+        fig = make_seasonal_panel(
+            lat2d,
+            lon2d,
+            all_monthly_data[
+                display_name
+            ],
+            display_name,
+            info["unit"],
+            info["long_name"]
+        )
+
+        figures.append(
+            fig
+        )
+
+    # =========================================================
+    # SHOW ONLY
+    # =========================================================
+
+    plt.show()
+
+
+# =============================================================
+# RUN
+# =============================================================
+
+if __name__ == "__main__":
+
+    make_three_variable_seasonal_maps()

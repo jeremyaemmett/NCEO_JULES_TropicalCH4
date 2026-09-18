@@ -1,610 +1,1443 @@
-import matplotlib.patheffects as PathEffects
-import cartopy.io.shapereader as shpreader
-import matplotlib.patches as patches
-import cartopy.io.img_tiles as cimgt
-import matplotlib.colors as mcolors
-import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
-import cartopy.crs as ccrs
-import matplotlib.cm as cm
-import processJULES
+from pathlib import Path
+from itertools import combinations
+
 import numpy as np
-import plotPARAMS
-import readJULES
-import rasterio
-import textwrap
-import dataOPS
-import sysOPS
-import os
+import pandas as pd
+import matplotlib.pyplot as plt
+
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import cartopy.io.shapereader as shpreader
 
 
-def make_maps(data_path, outp_path, file_name, year, stack_longitude_panels=False, apply_scale_factor=False, latitude_bounds=None):
+# =====================================================
+# SETTINGS
+# =====================================================
 
-    scale_factor = 1.0
+directory = Path(
+    "/Users/jae35/Desktop/JULES_test_data/ID_suites"
+)
 
-    if apply_scale_factor:
-        scale_file = os.path.join(data_path, "scale_factor.txt")
-        with open(scale_file, "r") as f:
-            scale_factor = float(f.read().strip())
-        print("Applying scale factor:", scale_factor)
+# -----------------------------------------------------
+# NetCDF containing the latitude / longitude grid.
+#
+# CHANGE THIS TO THE ACTUAL NETCDF FILE USED BY JULES.
+# -----------------------------------------------------
 
-    # Choose scaled or unscaled output folder
-    output_root = os.path.join(
-        outp_path,
-        'output',
-        'scaled' if apply_scale_factor else 'unscaled'
-    )
+NETCDF_FILE = Path(
+    "/Users/jae35/Desktop/JULES_test_data/ID_suites/u-dk105_0100/CRUJRA2.4_2023_n96_v8.0_S3.ilamb.2015.nc"
+)
 
-    os.makedirs(output_root, exist_ok=True)
+# -----------------------------------------------------
+# The 2D map produced by JULES.
+# This is a TEXT file, NOT a PNG.
+# -----------------------------------------------------
 
-    print("Saving outputs to:", output_root)
+MAP_FILENAME = "fch4_wetl_2005_(5)Jun_map.txt"
 
-    # Clear all .txt files in THIS output folder only
-    [os.remove(os.path.join(dp, f))
-     for dp, dn, fn in os.walk(output_root)
-     for f in fn if f.endswith('.txt')]
 
-    # Full 'time' array
-    times, times_unit, times_long_name, times_dims = readJULES.read_jules_m2(data_path + file_name, 'time')
-    times = dataOPS.ensure_np_datetime(times)
-    # Get the time dimension indices that fall within the desired year
-    year_indices = np.where((times >= np.datetime64(f'{year}-01-01')) & (times < np.datetime64(f'{year + 1}-01-01')))[0]
+FACTORS = [
+    "substrate",
+    "q10",
+    "soilmap",
+    "competition",
+]
 
-    header = readJULES.read_jules_header(data_path + file_name)
-    dimension_keys, variable_keys = list(header[0]), list(header[1])
 
-    if 'latitude' in variable_keys and 'longitude' in variable_keys: lat_string, lon_string = 'latitude', 'longitude'
-    if 'lat' in variable_keys and 'lon' in variable_keys: lat_string, lon_string = 'lat', 'lon'
+# =====================================================
+# VARIABLE TABLE
+# =====================================================
 
-    if 'lat' in dimension_keys and 'lon' in dimension_keys: lat_key, lon_key = 'lat', 'lon'
-    if 'y' in dimension_keys and 'x' in dimension_keys: lat_key, lon_key = 'y', 'x'
+variable_table = pd.DataFrame(
+    [
+        [0, 0, 0, 0],
+        [0, 0, 0, 1],
+        [0, 0, 1, 0],
+        [0, 0, 1, 1],
+        [0, 1, 0, 0],
+        [0, 1, 0, 1],
+        [0, 1, 1, 0],
+        [0, 1, 1, 1],
+        [0, 2, 0, 0],
+        [0, 2, 0, 1],
+        [0, 2, 1, 0],
+        [0, 2, 1, 1],
+        [0, 3, 0, 0],
+        [0, 3, 0, 1],
+        [0, 3, 1, 0],
+        [0, 3, 1, 1],
 
-    # Latitudes and Longitudes, their full arrays
-    lats, lats_units, lats_long_name, lats_dims = readJULES.read_jules_m2(data_path + file_name, lat_string)
-    lons, lons_units, lons_long_name, lons_dims = readJULES.read_jules_m2(data_path + file_name, lon_string)
-    
-    # Flatten 1D arrays and infer grid
-    lats_flat_full = lats.flatten()
-    lons_flat_full = lons.flatten()
+        [1, 0, 0, 0],
+        [1, 0, 0, 1],
+        [1, 0, 1, 0],
+        [1, 0, 1, 1],
+        [1, 1, 0, 0],
+        [1, 1, 0, 1],
+        [1, 1, 1, 0],
+        [1, 1, 1, 1],
+        [1, 2, 0, 0],
+        [1, 2, 0, 1],
+        [1, 2, 1, 0],
+        [1, 2, 1, 1],
+        [1, 3, 0, 0],
+        [1, 3, 0, 1],
+        [1, 3, 1, 0],
+        [1, 3, 1, 1],
 
-    # Optionally restrict latitude range
-    if latitude_bounds is not None:
-        lat_min, lat_max = latitude_bounds
+        [2, 0, 0, 0],
+        [2, 0, 0, 1],
+        [2, 0, 1, 0],
+        [2, 0, 1, 1],
+        [2, 1, 0, 0],
+        [2, 1, 0, 1],
+        [2, 1, 1, 0],
+        [2, 1, 1, 1],
+        [2, 2, 0, 0],
+        [2, 2, 0, 1],
+        [2, 2, 1, 0],
+        [2, 2, 1, 1],
+        [2, 3, 0, 0],
+        [2, 3, 0, 1],
+        [2, 3, 1, 0],
+        [2, 3, 1, 1],
+    ],
+    columns=FACTORS,
+)
 
-        lat_mask = (lats_flat_full >= lat_min) & (lats_flat_full <= lat_max)
 
-        if not np.any(lat_mask):
-            raise ValueError(f"No latitude points found between {lat_min} and {lat_max}")
+expected_combinations = {
+    tuple(row[f] for f in FACTORS)
+    for _, row in variable_table.iterrows()
+}
 
-        print(f"Restricting latitude range to {lat_min} to {lat_max}")
+
+# =====================================================
+# READ LAT/LON FROM NETCDF
+# =====================================================
+
+def read_lat_lon_from_netcdf(netcdf_file):
+    """
+    Read latitude and longitude from the NetCDF.
+
+    Supports:
+        latitude / longitude
+        lat / lon
+
+    Also supports either 1D or 2D coordinates.
+    """
+
+    import xarray as xr
+
+    print("\n==============================================")
+    print("READING LATITUDE / LONGITUDE")
+    print("==============================================")
+
+    print("NetCDF:", netcdf_file)
+
+    ds = xr.open_dataset(netcdf_file)
+
+    # -------------------------------------------------
+    # Find latitude variable
+    # -------------------------------------------------
+
+    if "latitude" in ds.variables:
+        lat = ds["latitude"].values
+
+    elif "lat" in ds.variables:
+        lat = ds["lat"].values
 
     else:
-        lat_mask = np.ones(lats_flat_full.shape, dtype=bool)
-
-    # Apply the same mask to latitude and longitude
-    lats_flat = lats_flat_full[lat_mask]
-    lons_flat = lons_flat_full[lat_mask]
-
-    lats_unique = np.sort(np.unique(lats_flat))
-    lons_unique = np.sort(np.unique(lons_flat))
-    dlat = np.median(np.diff(lats_unique))
-    dlon = np.median(np.diff(lons_unique))
-    lat_grid = np.arange(lats_unique.min(), lats_unique.max() + dlat/2, dlat)
-    lon_grid = np.arange(lons_unique.min(), lons_unique.max() + dlon/2, dlon)
-    Ny, Nx = len(lat_grid), len(lon_grid)
-    lon_mesh, lat_mesh = np.meshgrid(lon_grid, lat_grid)
-    lat_idx = ((lats_flat - lat_grid[0]) / dlat).round().astype(int)
-    lon_idx = ((lons_flat - lon_grid[0]) / dlon).round().astype(int)
-    lat2d, lon2d = np.meshgrid(lat_grid, lon_grid, indexing='ij')
-
-    #print('Lats: ', lats)
-    #print('Lons: ', lons)
-    #print('Coords are serialized with inferred lat/lon resolution: ', dlat, dlon)
-
-    # Loop through variables
-    for variable_name in plotPARAMS.variable_names:
-        print('Processing variable:', variable_name)
-
-        # 1. Read variable
-        variable_array, variable_unit, variable_long_name, variable_dims = readJULES.read_jules_m2(
-            data_path + file_name, variable_name
+        raise ValueError(
+            "Could not find latitude variable in NetCDF. "
+            "Expected 'latitude' or 'lat'."
         )
 
-        # 2. Sanitize extreme values
-        variable_array = dataOPS.sanitize_extreme_values(variable_array)
+    # -------------------------------------------------
+    # Find longitude variable
+    # -------------------------------------------------
 
-        # 2b. Optionally apply scale factor to fch4_wetl
-        if apply_scale_factor and variable_name == "fch4_wetl":
-            variable_array *= scale_factor
+    if "longitude" in ds.variables:
+        lon = ds["longitude"].values
 
-        # 2c. Convert fch4_wetl from kg C to kg CH4
-        if variable_name == "fch4_wetl":
-            variable_array *= (16.043 / 12.011)
+    elif "lon" in ds.variables:
+        lon = ds["lon"].values
 
-        # 3. Map 1D variable to grid
-        lat_axis = variable_dims.index(lat_key) if lat_key in variable_dims else None
-        lon_axis = variable_dims.index(lon_key) if lon_key in variable_dims else None
-        
-        extra_axes = [i for i in range(len(variable_dims)) if i not in [lat_axis, lon_axis]]
-        extra_shape = [variable_array.shape[i] for i in extra_axes]
-        var_grid = np.full(extra_shape + [Ny, Nx], np.nan)
-        
-        # Loop through extra dimensions e.g. layer, soil type, etc.
-        for idx in np.ndindex(*extra_shape):
-            orig_idx = list(idx)
-            if lat_axis is not None:
-                orig_idx.insert(lat_axis if lat_axis < len(orig_idx) else len(orig_idx), slice(None))
-            if lon_axis is not None:
-                orig_idx.insert(lon_axis if lon_axis < len(orig_idx) else len(orig_idx), slice(None))
-            
-            flat_values = variable_array[tuple(orig_idx)].flatten()
-
-            if flat_values.size != lats_flat_full.size:
-                raise ValueError(f"Mismatch between flat_values ({flat_values.size}) and lat/lon points ({lats_flat_full.size})")
-
-            # Apply the same latitude mask to the variable
-            flat_values = flat_values[lat_mask]
-
-            var_grid[idx + (lat_idx, lon_idx)] = flat_values
-
-        variable_array = var_grid
-        print('Variable gridded shape:', variable_array.shape)
-
-        # 4. Trim time to desired year
-        if 'time' in variable_dims and variable_array.shape[0] > 12:
-            time_dim_index = np.where(np.array(variable_dims) == 'time')[0][0]
-            variable_array = np.take(variable_array, indices=year_indices, axis=time_dim_index)
-
-        # 5. Generate slice indices for additional dimensions
-        iterable_dimension_mask = ~np.isin(list(variable_dims), [lon_key, lat_key])
-        iterable_dimension_keys = np.array(list(variable_dims))[iterable_dimension_mask]
-        iterable_dimension_idxs = np.where(iterable_dimension_mask)[0]
-        iterable_dimension_iter = np.array(variable_array.shape)[iterable_dimension_idxs]
-        indices = dataOPS.generate_indices(list(iterable_dimension_iter))
-
-        for combo in indices:
-            key_labels = [str(year)]
-            variable_array2 = np.copy(variable_array)
-            count = 0
-            for var_dim_key, slice_index, slice_val in zip(iterable_dimension_keys, iterable_dimension_idxs, combo):
-                variable_array2 = variable_array2.take(slice_val, axis=slice_index - count)
-                key_labels.append("("+str(slice_val)+")" + dataOPS.keyval2keylabel(var_dim_key, slice_val))
-                count += 1
-
-            sub_folder = key_labels[-1].replace(".", "p").replace(" ", "") if len(key_labels) > 2 else None
-
-            # Make map and save
-            # lat2d, lon2d, and variable_array2 have dimensions: [n_lats, n_lons]
-            fig, ax = world_map(lat2d, lon2d)
-            
-            overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name,
-                              variable_array2, variable_unit, key_labels,
-                              'inferno', *dataOPS.globalMinMax(variable_array, variable_unit), [0.40, 0.05, 0.20, 0.025])
-            
-            ax.add_feature(cfeature.OCEAN, facecolor='powderblue', zorder=1, alpha=1.0)
-            
-            #print('test: ', variable_array2.shape)
-            #print('lats: ', lat2d.shape)
-            #print('lons: ', lon2d.shape)
-
-            zonal_mean = processJULES.compute_zonal_mean2(variable_array2)
-            areal_mean = processJULES.compute_areal_mean2(variable_array2, lat2d, lon2d)
-            zonal_intg = processJULES.compute_zonal_intg2(variable_array2, lat2d, lon2d)
-
-            #print('zonal_mean: ', zonal_mean)
-            #def compute_zonal_mean(variable_array, variable_unit, lat2d, lon2d, lats, lons, lat1, lat2, lon1, lon2): 
-
-            cleaned_text = str(key_labels).translate(
-                str.maketrans({char: "" for char in "[]',"})
-            ).replace(" ", "_").replace(".", "p")
-
-            save_dir = os.path.join(output_root, variable_name)
-
-            if sub_folder:
-                save_dir = os.path.join(save_dir, sub_folder)
-
-            os.makedirs(save_dir, exist_ok=True)
-
-            with open(save_dir + '/_zonalmean_tseries.txt', 'a') as file:
-                file.write(' '.join(map(str, zonal_mean)) + '\n')
-
-            with open(save_dir + '/_arealmean_tseries.txt', 'a') as file:
-                file.write(str(areal_mean) + '\n')
-
-            with open(save_dir + '/_zonalintg_tseries.txt', 'a') as file:
-                file.write(' '.join(map(str, zonal_intg)) + '\n')
-
-            # Save 2D map as text file
-            map_txt_path = os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.txt')
-            np.savetxt(map_txt_path, variable_array2, fmt='%.6e')
-            #fig.patch.set_alpha(0) # background transparency
-
-            map_name = f'{variable_name}_{cleaned_text}_map.png'
-            fname = os.path.basename(map_name)
-            ax.set_title(fname.split(')')[1].split('_map')[0], fontsize=48, fontstyle='italic', loc='left', y=0.1, x=0.02)
-
-            plt.savefig(os.path.join(save_dir, f'{variable_name}_{cleaned_text}_map.png'), dpi=300, bbox_inches='tight')
-            plt.close()
-
-        make_seasonal_panel_from_txt(
-            save_dir,
-            lat2d,
-            lon2d,
-            variable_name,
-            variable_long_name,
-            variable_unit,
-            *dataOPS.globalMinMax(variable_array, variable_unit)
+    else:
+        raise ValueError(
+            "Could not find longitude variable in NetCDF. "
+            "Expected 'longitude' or 'lon'."
         )
 
+    ds.close()
 
-def make_animated_maps(data_path, outp_path, file_name, year):
+    lat = np.asarray(lat, dtype=float)
+    lon = np.asarray(lon, dtype=float)
 
-    # Make a list of every t-series file across all of the input variables
-    files = sysOPS.discover_files(outp_path, '_map.png')
+    print("Latitude shape:", lat.shape)
+    print("Longitude shape:", lon.shape)
 
-    unique_end_directories = sysOPS.get_unique_end_directories(files)
+    # -------------------------------------------------
+    # If coordinates are already 2D, use them directly.
+    # -------------------------------------------------
 
-    for unique_end_directory in unique_end_directories:
+    if lat.ndim == 2 and lon.ndim == 2:
 
-        map_files = sysOPS.discover_files(unique_end_directory, '_map.png')
-        
-        #miscOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/' + unique_end_directory.split('/')[-1] + '_animation.gif', duration=150, smooth=True, exclude_substr='plot_')
-        sysOPS.pngs_to_gif(unique_end_directory, unique_end_directory + '/map_animation.gif', duration=150, smooth=True, exclude_substr=['plot_', 'complete', 'zonalmeans'])
+        if lat.shape != lon.shape:
+            raise ValueError(
+                f"2D latitude shape {lat.shape} does not match "
+                f"longitude shape {lon.shape}"
+            )
+
+        lat2d = lat
+        lon2d = lon
+
+    # -------------------------------------------------
+    # If coordinates are 1D, construct mesh.
+    # -------------------------------------------------
+
+    elif lat.ndim == 1 and lon.ndim == 1:
+
+        lon2d, lat2d = np.meshgrid(
+            lon,
+            lat,
+        )
+
+    else:
+
+        raise ValueError(
+            "Latitude and longitude must both be 1D "
+            "or both be 2D."
+        )
+
+    print("Map grid shape:", lat2d.shape)
+
+    print(
+        f"Latitude range:  "
+        f"{np.nanmin(lat2d):.4f} to "
+        f"{np.nanmax(lat2d):.4f}"
+    )
+
+    print(
+        f"Longitude range: "
+        f"{np.nanmin(lon2d):.4f} to "
+        f"{np.nanmax(lon2d):.4f}"
+    )
+
+    return lat2d, lon2d
 
 
-def world_map(lats, lons, dem_path='ETOPO1.tiff', country_fontsize=8):
+# =====================================================
+# READ ONE 2D MAP
+# =====================================================
+
+def read_map(filepath, expected_shape):
     """
-    Create a world map with shaded topography, rivers, borders, and country labels.
+    Read one JULES 2D map text file.
+
+    NaN values are retained as missing spatial cells.
     """
-    # Map extents
-    lon_min, lon_max = np.min(lons)-1.5, np.max(lons)+1.5
-    lat_min, lat_max = np.min(lats)-1.5, np.max(lats)+1.5
 
-    #print('Lon min, max: ', lon_min, lon_max)
+    try:
 
-    # Figure and axis
-    fig = plt.figure(figsize=(40, 20))
-    ax = plt.axes(projection=ccrs.Robinson())
-    #ax.set_extent([-180, 180, -90.0, 90.0], crs=ccrs.PlateCarree())
+        data = np.loadtxt(
+            filepath,
+            dtype=float,
+        )
+
+    except Exception as exc:
+
+        raise ValueError(
+            f"Could not read map:\n"
+            f"{filepath}\n"
+            f"Reason: {exc}"
+        )
+
+    data = np.asarray(data, dtype=float)
+
+    if data.ndim != 2:
+
+        raise ValueError(
+            f"Expected a 2D map in {filepath}, "
+            f"but got shape {data.shape}"
+        )
+
+    if data.shape != expected_shape:
+
+        raise ValueError(
+            f"Map shape mismatch:\n"
+            f"  file: {filepath}\n"
+            f"  map shape: {data.shape}\n"
+            f"  coordinate shape: {expected_shape}"
+        )
+
+    return data
+
+
+# =====================================================
+# MAP ALL SUITES
+# =====================================================
+
+def load_all_maps():
+
+    suite_directories = sorted(
+        p for p in directory.iterdir()
+        if p.is_dir()
+    )
+
+    print("\n==============================================")
+    print("SUITE DIRECTORY CHECK")
+    print("==============================================")
+
+    print(
+        f"Suite directories found: "
+        f"{len(suite_directories)}"
+    )
+
+    if len(suite_directories) != 48:
+
+        raise ValueError(
+            f"Expected 48 suite directories, "
+            f"but found {len(suite_directories)}"
+        )
+
+    maps = {}
+
+    suite_names = []
+
+    for subdir in suite_directories:
+
+        name = subdir.name
+
+        # -------------------------------------------------
+        # Extract four-digit factorial code.
+        # -------------------------------------------------
+
+        code = name.split("_")[-1]
+
+        if len(code) != 4 or not code.isdigit():
+
+            print(
+                f"Skipping suite with invalid code: {name}"
+            )
+
+            continue
+
+        combination = tuple(
+            int(x)
+            for x in code
+        )
+
+        if combination not in expected_combinations:
+
+            print(
+                f"WARNING: unexpected combination "
+                f"{combination} in {name}"
+            )
+
+            continue
+
+        filepath = subdir / "plots" / "output" / "scaled" / "fch4_wetl" / MAP_FILENAME
+
+        if not filepath.exists():
+
+            raise FileNotFoundError(
+                "\nMISSING MAP:\n"
+                f"  suite: {name}\n"
+                f"  file:  {filepath}"
+            )
+
+        suite_names.append(name)
+
+        maps[combination] = filepath
+
+        print(
+            f"FOUND: {name:15s} "
+            f"S={combination[0]} "
+            f"Q={combination[1]} "
+            f"M={combination[2]} "
+            f"C={combination[3]}"
+        )
+
+    if len(maps) != 48:
+
+        raise ValueError(
+            f"Expected 48 maps but found {len(maps)}"
+        )
+
+    return maps
+
+
+# =====================================================
+# BUILD 4D ARRAY
+# =====================================================
+
+def build_data_array(map_files, lat2d, lon2d):
+
+    ny, nx = lat2d.shape
+
+    data = np.full(
+        (
+            3,      # substrate
+            4,      # q10
+            2,      # soilmap
+            2,      # competition
+            ny,
+            nx,
+        ),
+        np.nan,
+        dtype=float,
+    )
+
+    print("\n==============================================")
+    print("READING 2D MAPS")
+    print("==============================================")
+
+    for combination, filepath in sorted(
+        map_files.items()
+    ):
+
+        substrate, q10, soilmap, competition = combination
+
+        print(
+            f"Reading "
+            f"S={substrate} "
+            f"Q={q10} "
+            f"M={soilmap} "
+            f"C={competition}"
+        )
+
+        values = read_map(
+            filepath,
+            lat2d.shape,
+        )
+
+        data[
+            substrate,
+            q10,
+            soilmap,
+            competition,
+            :, :
+        ] = values
+
+    return data
+
+
+# =====================================================
+# FACTORIAL EFFECT CALCULATION
+# =====================================================
+
+def calculate_effect(
+    data,
+    target_factors,
+    factor_axes,
+):
+    """
+    Calculate the pure factorial effect at every
+    spatial grid cell.
+
+    Missing values are handled using nanmean.
+
+    target_factors:
+        e.g. ("substrate",)
+
+        or ("substrate", "q10")
+
+        or ("substrate", "q10", "soilmap")
+
+        etc.
+
+    Returns:
+        effect[lat, lon]
+    """
+
+    all_factors = list(FACTORS)
+
+    k = len(target_factors)
+
+    effect = np.zeros(
+        data.shape[-2:],
+        dtype=float,
+    )
+
+    # -------------------------------------------------
+    # Inclusion-exclusion over all subsets.
+    # -------------------------------------------------
+
+    for subset_size in range(k + 1):
+
+        for subset in combinations(
+            target_factors,
+            subset_size,
+        ):
+
+            # -------------------------------------------------
+            # Sign:
+            #
+            # (-1)^(k - subset_size)
+            # -------------------------------------------------
+
+            sign = (
+                -1
+                if (k - subset_size) % 2
+                else 1
+            )
+
+            if subset_size == 0:
+
+                # Grand mean over all 48 factorial cells.
+                marginal = np.nanmean(
+                    data,
+                    axis=tuple(
+                        factor_axes[f]
+                        for f in all_factors
+                    ),
+                )
+
+            else:
+
+                # -------------------------------------------------
+                # Average over factors NOT in subset.
+                # -------------------------------------------------
+
+                axes_to_average = [
+                    factor_axes[f]
+                    for f in all_factors
+                    if f not in subset
+                ]
+
+                marginal = np.nanmean(
+                    data,
+                    axis=tuple(
+                        axes_to_average
+                    ),
+                )
+
+                # -------------------------------------------------
+                # marginal currently has dimensions:
+                #
+                # subset-factor dimensions + lat + lon
+                #
+                # We need to average over the subset levels too
+                # only when calculating each combination's effect.
+                #
+                # For the spatial ANOVA SS we need the effect for
+                # each target combination, so this function is
+                # instead handled below by summing all combination
+                # effects.
+                # -------------------------------------------------
+
+            # This branch is not used directly here.
+            # The actual spatial SS calculation is below.
+
+    raise RuntimeError(
+        "calculate_effect should not be called directly."
+    )
+
+
+# =====================================================
+# PURE EFFECTS FOR EVERY FACTOR COMBINATION
+# =====================================================
+
+def calculate_spatial_anova(data):
+
+    """
+    Calculate spatial sum of squares for all 15
+    factorial terms.
+
+    Returns:
+
+        components[name] = 2D SS map
+
+    where each pixel contains the ANOVA SS for that
+    factorial term.
+    """
+
+    n_factors = len(FACTORS)
+
+    factor_sizes = {
+        "substrate": 3,
+        "q10": 4,
+        "soilmap": 2,
+        "competition": 2,
+    }
+
+    ny, nx = data.shape[-2:]
+
+    # -------------------------------------------------
+    # Grand mean.
+    # -------------------------------------------------
+
+    grand_mean = np.nanmean(
+        data,
+        axis=(0, 1, 2, 3),
+    )
+
+    # -------------------------------------------------
+    # Valid observation count.
+    # -------------------------------------------------
+
+    valid_count = np.sum(
+        np.isfinite(data),
+        axis=(0, 1, 2, 3),
+    )
+
+    components = {}
+
+    effect_order = []
+
+    # -------------------------------------------------
+    # Loop through every non-empty factor subset.
+    # -------------------------------------------------
+
+    for order in range(
+        1,
+        n_factors + 1,
+    ):
+
+        for target in combinations(
+            FACTORS,
+            order,
+        ):
+
+            name = ":".join(target)
+
+            print(
+                f"Calculating {name}"
+            )
+
+            # -------------------------------------------------
+            # Pure effect for each target-level combination.
+            #
+            # We store:
+            #
+            # effect[level combination, lat, lon]
+            # -------------------------------------------------
+
+            target_shape = [
+                factor_sizes[f]
+                for f in target
+            ]
+
+            effects = np.zeros(
+                target_shape + [ny, nx],
+                dtype=float,
+            )
+
+            # -------------------------------------------------
+            # Iterate over every target combination.
+            # -------------------------------------------------
+
+            for target_indices in np.ndindex(
+                *target_shape
+            ):
+
+                effect = np.zeros(
+                    (ny, nx),
+                    dtype=float,
+                )
+
+                # -------------------------------------------------
+                # Inclusion-exclusion.
+                # -------------------------------------------------
+
+                for subset_size in range(
+                    order + 1
+                ):
+
+                    for subset in combinations(
+                        target,
+                        subset_size,
+                    ):
+
+                        sign = (
+                            -1
+                            if (
+                                order - subset_size
+                            ) % 2
+                            else 1
+                        )
+
+                        # -------------------------------------------------
+                        # Empty subset = grand mean.
+                        # -------------------------------------------------
+
+                        if subset_size == 0:
+
+                            marginal = grand_mean
+
+                        else:
+
+                            # -------------------------------------------------
+                            # Determine target indices belonging to subset.
+                            # -------------------------------------------------
+
+                            subset_positions = [
+                                target.index(f)
+                                for f in subset
+                            ]
+
+                            subset_indices = tuple(
+                                target_indices[p]
+                                for p in subset_positions
+                            )
+
+                            # -------------------------------------------------
+                            # Axes to average over:
+                            #
+                            # all factorial axes except those in subset.
+                            # -------------------------------------------------
+
+                            axes = []
+
+                            for factor in FACTORS:
+
+                                if factor not in subset:
+
+                                    axes.append(
+                                        FACTORS.index(
+                                            factor
+                                        )
+                                    )
+
+                            # -------------------------------------------------
+                            # np.nanmean over factorial dimensions.
+                            # -------------------------------------------------
+
+                            marginal_all = np.nanmean(
+                                data,
+                                axis=tuple(axes),
+                            )
+
+                            # -------------------------------------------------
+                            # marginal_all now has dimensions:
+                            #
+                            # subset dimensions + lat + lon
+                            #
+                            # Select the desired subset combination.
+                            # -------------------------------------------------
+
+                            selector = (
+                                subset_indices
+                                + (
+                                    slice(None),
+                                    slice(None),
+                                )
+                            )
+
+                            marginal = marginal_all[
+                                selector
+                            ]
+
+                        effect += (
+                            sign * marginal
+                        )
+
+                effects[
+                    target_indices
+                ] = effect
+
+            # -------------------------------------------------
+            # Sum of squares for this term.
+            #
+            # With one observation per factorial cell:
+            #
+            # SS = sum(effect^2)
+            #
+            # across all levels of the term.
+            # -------------------------------------------------
+
+            ss = np.nansum(
+                effects ** 2,
+                axis=tuple(
+                    range(order)
+                ),
+            )
+
+            # -------------------------------------------------
+            # Mask locations where there are no observations.
+            # -------------------------------------------------
+
+            ss[
+                valid_count == 0
+            ] = np.nan
+
+            components[name] = ss
+
+            effect_order.append(name)
+
+    return (
+        components,
+        grand_mean,
+        valid_count,
+        effect_order,
+    )
+
+
+# =====================================================
+# CHECK TOTAL SUM OF SQUARES
+# =====================================================
+
+def calculate_total_ss(data):
+
+    grand_mean = np.nanmean(
+        data,
+        axis=(0, 1, 2, 3),
+    )
+
+    total_ss = np.nansum(
+        (
+            data
+            - grand_mean[None, None, None, None, :, :]
+        ) ** 2,
+        axis=(0, 1, 2, 3),
+    )
+
+    valid_count = np.sum(
+        np.isfinite(data),
+        axis=(0, 1, 2, 3),
+    )
+
+    total_ss[
+        valid_count == 0
+    ] = np.nan
+
+    return total_ss
+
+
+# =====================================================
+# MAP STYLE
+# =====================================================
+
+def create_map(
+    lat2d,
+    lon2d,
+    title,
+):
+
+    fig = plt.figure(
+        figsize=(16, 9)
+    )
+
+    ax = plt.axes(
+        projection=ccrs.Robinson()
+    )
+
     ax.set_global()
-    #ax.set_extent([lon_min, lon_max, lat_min, lat_max])
 
-    # --- Overlay topographic shading from DEM ---
-    #try:
-    #    with rasterio.open(dem_path) as src:
-    #        topo = src.read(1)
-    #        extent = [src.bounds.left, src.bounds.right, src.bounds.bottom, src.bounds.top]
-    #        ax.imshow(topo, extent=extent, transform=ccrs.PlateCarree(),
-    #                  cmap='gist_earth', alpha=0.5, zorder=0)
-    #except Exception as e:
-    #    print(f"Warning: Could not load DEM for shading: {e}")
+    # -------------------------------------------------
+    # Land
+    # -------------------------------------------------
 
-    # --- Base layers ---
-    ax.add_feature(cfeature.LAND, facecolor='#f5e6c8', zorder=1, alpha=1)
-    #ax.add_feature(cfeature.LAND, facecolor='blue', zorder=1, alpha=0.5)
-    ax.add_feature(cfeature.OCEAN, facecolor='#a6cee3', zorder=1, alpha=0.5)
-    ax.add_feature(cfeature.LAKES, facecolor='#a6cee3', zorder=1, alpha=0.5)
-    ax.add_feature(cfeature.RIVERS.with_scale('50m'), edgecolor='blue', linewidth=0.5, zorder=2)
-    ax.add_feature(cfeature.BORDERS.with_scale('50m'), linewidth=1.2, zorder=3, edgecolor='gray')
-    ax.coastlines(resolution='50m', zorder=4)
+    ax.add_feature(
+        cfeature.LAND,
+        facecolor="#f5e6c8",
+        zorder=1,
+    )
 
-    # --- Gridlines ---
-    gl = ax.gridlines(draw_labels=True, linewidth=0.5, color='gray', alpha=0.7, linestyle='--')
+    # -------------------------------------------------
+    # Ocean
+    # -------------------------------------------------
+
+    ax.add_feature(
+        cfeature.OCEAN,
+        facecolor="#a6cee3",
+        zorder=1,
+        alpha=0.5,
+    )
+
+    # -------------------------------------------------
+    # Lakes
+    # -------------------------------------------------
+
+    ax.add_feature(
+        cfeature.LAKES,
+        facecolor="#a6cee3",
+        zorder=1,
+        alpha=0.5,
+    )
+
+    # -------------------------------------------------
+    # Rivers
+    # -------------------------------------------------
+
+    ax.add_feature(
+        cfeature.RIVERS.with_scale("50m"),
+        edgecolor="blue",
+        linewidth=0.5,
+        zorder=2,
+    )
+
+    # -------------------------------------------------
+    # Borders
+    # -------------------------------------------------
+
+    ax.add_feature(
+        cfeature.BORDERS.with_scale("50m"),
+        linewidth=1.0,
+        edgecolor="gray",
+        zorder=3,
+    )
+
+    ax.coastlines(
+        resolution="50m",
+        zorder=4,
+    )
+
+    # -------------------------------------------------
+    # Gridlines
+    # -------------------------------------------------
+
+    gl = ax.gridlines(
+        draw_labels=True,
+        linewidth=0.5,
+        color="gray",
+        alpha=0.7,
+        linestyle="--",
+    )
 
     gl.top_labels = False
     gl.right_labels = False
-    gl.bottom_labels = True
-    gl.left_labels = True
 
-    gl.xlabel_style = {'fontsize': 26}
-    gl.ylabel_style = {'fontsize': 26}
+    gl.xlabel_style = {
+        "fontsize": 12
+    }
 
-    gl.xpadding = -10
-    gl.ypadding = -10
-    #gl.left_labels = False
+    gl.ylabel_style = {
+        "fontsize": 12
+    }
 
-    # --- Country labels ---
-    shpfilename = shpreader.natural_earth(
-        resolution='110m', category='cultural', name='admin_0_countries'
+    ax.set_title(
+        title,
+        fontsize=18,
+        fontweight="bold",
+        loc="left",
     )
-    reader = shpreader.Reader(shpfilename)
-
-    #for record in reader.records():
-    #    geom = record.geometry
-    #    centroid = geom.centroid
-    #    if (lat_min <= centroid.y <= lat_max):
-    #        txt = ax.text(
-    #            centroid.x, centroid.y, record.attributes['NAME'],
-    #            fontsize=country_fontsize,
-    #            fontstyle='italic',      # keep italic if desired
-    #            fontfamily='sans-serif', # keep family if needed
-    #            transform=ccrs.PlateCarree(),
-    #            ha='center', va='center', color='black',
-    #        )
-    #        # Add white outline around text
-    #        txt.set_path_effects([
-    #            PathEffects.withStroke(linewidth=1.5, foreground='lightgray')
-    #        ])
 
     return fig, ax
 
 
-def overplot_variable(ax, lat2d, lon2d, variable_name, variable_long_name, variable_array, variable_unit, key_labels, cmap, variable_global_min, variable_global_max, cbar_pos):
+# =====================================================
+# PLOT ONE ANOVA MAP
+# =====================================================
 
-    """Overplot, onto an empty map, filled contours and a colorbar to display a mapped variable
-    Args:
-        ax (matplotlib.axes._axes.Axes object): Plot axis
-        lat2d / lon2d (float): 2D meshgrids of latitude / longitude coordinates
-        variable_name / variable_long_name (string): Short name / Long name of the mapped variable
-        variable_array (float): Mapped variable array
-        variable_unit (string): Physical unit of the mapped variable
-        key_labels (_type_): Descriptive labels for the mapped variable's dimensions
-        cmap (matplotlib.colors.Colormap object): Colormap name
-        variable_global_min / variable_global_max (float): Fixed minimum / maximum contour levels for the mapped variable
-    """
+def plot_anova_map(
+    lat2d,
+    lon2d,
+    values,
+    title,
+    output_file,
+    vmax=100,
+):
 
-    vmin, vmax = variable_global_min, variable_global_max
-    if variable_name == 'fch4_wetl':
-        vmin, vmax = 0.0, 0.9
-
-    #print('vmin, vmax: ', vmin, vmax)
-
-    n_levels = 10
-
-    step_raw = (vmax - vmin) / (n_levels - 1)
-    mag = 10 ** np.floor(np.log10(step_raw))
-    step = mag * (1 if step_raw/mag <= 1 else 2 if step_raw/mag <= 2 else 5)
-
-    vmin_r = np.floor(vmin / step) * step
-    vmax_r = np.ceil(vmax / step) * step
-
-    #print('var: ', variable_name)
-    levels = np.arange(vmin_r, vmax_r + step/2, step)
-
-    #print(lat2d.shape)
-
-    #c = ax.contourf(lon2d, lat2d, variable_array,
-    #                levels=levels, cmap=cmap, transform=ccrs.PlateCarree(), alpha=0.7)
-    
-    # test test test
-
-    norm = mcolors.Normalize(vmin=vmin, vmax=vmax)
-    rgba_cmap = plt.get_cmap(cmap)
-
-    # Create RGBA array from colormap
-    rgba_colors = rgba_cmap(norm(variable_array))
-
-    alpha = norm(variable_array)
-    alpha = np.clip(alpha, 0, 1)
-    alpha = np.nan_to_num(alpha, nan=0.0, posinf=1.0, neginf=0.0)
-
-    rgba_colors[..., -1] = alpha
-
-    # Plot with pcolormesh: pass RGBA as C, not via color=
-    c = ax.pcolormesh(
-        lon2d, lat2d, rgba_colors,
-        shading='auto',
-        transform=ccrs.PlateCarree()
-    )
-
-    # test test test
-
-    #cb = plt.colorbar(c, orientation='vertical', pad=0.05, shrink=0.6)
-
-    #cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=12)
-    #cb.ax.tick_params(labelsize=12)
-
-    # --- Overlay land color behind the colorbar ---
-    # --- 1. Draw a solid land-color base colorbar ---
-    # Assume `cb_ax` is the colorbar axis you’ll use
-    #cb_ax = plt.gcf().add_axes([0.77, 0.25, 0.02, 0.50])  # left, bottom, width, height
-    cb_ax = plt.gcf().add_axes(cbar_pos)
-
-    # Draw a rectangle with land color in the full colorbar area
-    cb_ax.add_patch(
-        plt.Rectangle(
-            (0, 0), 1, 1,                 # fill full axes
-            transform=cb_ax.transAxes,     # axes coords
-            color='#f5e6c8',               # land color
-            zorder=0, alpha = 0.5
-        )
-    )
-
-    # Now create the ScalarMappable with your alpha-aware colormap
-    N = 256
-    colors = rgba_cmap(np.linspace(0, 1, N))
-    colors[:, -1] = np.linspace(0, 1, N)  # alpha ramp
-    alpha_cmap = mcolors.ListedColormap(colors)
-    sm = cm.ScalarMappable(cmap=alpha_cmap, norm=norm)
-    sm.set_array(variable_array)
-
-    # Overlay the actual colorbar on top of the land rectangle
-    cb = plt.colorbar(sm, cax=cb_ax, orientation='horizontal')
-    #cb = plt.colorbar(sm, cax=cb_ax, orientation='vertical')
-    cb.set_label(dataOPS.cleanup_exponents(variable_unit), fontsize=36)
-    cb.ax.tick_params(labelsize=36)
-
-    variable_name_fix = variable_name.split('_')[0] + '\_' + variable_name.split('_')[1] if len(variable_name.split('_')) > 1 else variable_name
-
-    subtitle = ''
-    for key in key_labels: subtitle += key + '  '
-    
-    #ax.set_title(dataOPS.remove_parenthetical_substrings(r"$\bf{" + variable_name_fix + "}$" + '\n' + variable_long_name), loc='left', fontsize=22)
-    #ax.set_title('March', fontsize=22, fontstyle='italic')
-
-    x0 = np.min(lon2d)
-    y0 = np.min(lat2d) - 1 + 0.75
-    rect_width = 9.0
-    rect_height = 1.5
-
-    # Draw fixed rectangle
-    #rect = patches.FancyBboxPatch(
-    #    (x0, y0), width=rect_width, height=rect_height,
-    #    boxstyle="round,pad=0.6",
-    #    facecolor='white', edgecolor='black', alpha=0.80, zorder=10
-    #)
-    #ax.add_patch(rect)
-
-    # Left-align text inside the box
-    #ax.text(    #    x0 + 0.2, y0 + rect_height/2,  # small horizontal padding from left edge
-    #    dataOPS.remove_parenthetical_substrings(subtitle),
-    #    ha='left', va='center', fontsize=14,
-    #    color='black', style='italic', zorder=11
-    #)
-
-
-def add_hillshade(ax):
-    tiler = cimgt.Stamen('terrain-background')  # or 'terrain'
-    ax.add_image(tiler, 6, zorder=0)  # 6 is zoom level, adjust for resolution
-
-
-def make_seasonal_panel_from_txt(
-        save_dir,
+    fig, ax = create_map(
         lat2d,
         lon2d,
-        variable_name,
-        variable_long_name,
-        variable_unit,
-        variable_global_min,
-        variable_global_max):
+        title,
+    )
 
-    mode = 'global'
+    masked = np.ma.masked_invalid(
+        values
+    )
 
-    if mode == 'sudd':
+    mesh = ax.pcolormesh(
+        lon2d,
+        lat2d,
+        masked,
+        transform=ccrs.PlateCarree(),
+        shading="auto",
+        cmap="viridis",
+        vmin=0,
+        vmax=vmax,
+        zorder=5,
+    )
 
-        lon_min, lon_max = 20, 39
-        lat_min, lat_max = -2, 17
+    cbar = plt.colorbar(
+        mesh,
+        ax=ax,
+        orientation="horizontal",
+        pad=0.05,
+        shrink=0.7,
+    )
 
-    if mode == 'global':
+    cbar.set_label(
+        "Contribution to variance (%)",
+        fontsize=12,
+    )
 
-        lon_min, lon_max = -180, 180
-        lat_min, lat_max = -90, 90
-
-    months = ['Mar', 'Jun', 'Sep', 'Dec']
-
-    files = {}
-
-    for fname in os.listdir(save_dir):
-
-        if not fname.endswith('_map.txt'):
-            continue
-
-        for month in months:
-            if month in fname:
-                files[month] = os.path.join(save_dir, fname)
-
-    missing = [m for m in months if m not in files]
-
-    if missing:
-        print(f"Skipping {save_dir}, missing {missing}")
-        return
-
-    fig = plt.figure(figsize=(15, 10)) # 24, 11
-
-    positions = {
-        'Mar': 1,
-        'Jun': 2,
-        'Sep': 3,
-        'Dec': 4
-    }
-
-    for month in months:
-
-        ax = fig.add_subplot(
-            2,
-            2,
-            positions[month],
-            projection=ccrs.PlateCarree()
-        )
-
-        # replicate world_map styling
-        ax.set_extent([-180, 180, -90, 90],
-                      crs=ccrs.PlateCarree())
-
-        ax.add_feature(
-            cfeature.LAND,
-            facecolor='#f5e6c8',
-            zorder=1,
-            alpha=1
-        )
-
-        ax.add_feature(
-            cfeature.OCEAN,
-            facecolor='#a6cee3',
-            zorder=1,
-            alpha=0.5
-        )
-
-        ax.add_feature(
-            cfeature.LAKES,
-            facecolor='#a6cee3',
-            zorder=1,
-            alpha=0.5
-        )
-
-        ax.add_feature(
-            cfeature.RIVERS.with_scale('50m'),
-            edgecolor='blue',
-            linewidth=0.5,
-            zorder=2
-        )
-
-        ax.add_feature(
-            cfeature.BORDERS.with_scale('50m'),
-            linewidth=1.2,
-            zorder=3,
-            edgecolor='gray'
-        )
-
-        ax.coastlines(resolution='50m', zorder=4)
-
-        data = np.loadtxt(files[month])
-
-        overplot_variable(
-            ax,
-            lat2d,
-            lon2d,
-            variable_name,
-            variable_long_name,
-            data,
-            variable_unit,
-            [month],
-            'inferno',
-            variable_global_min,
-            variable_global_max,
-            [0.40, 0.05, 0.20, 0.025]
-        )
-
-        ax.add_feature(
-            cfeature.OCEAN,
-            facecolor="#bcd9e9",
-            zorder=4,
-            alpha=1.0
-        )
-
-        # left, bottom, width, height [0.375, 0.51, 0.25, 0.015]
-
-        ax.set_title(
-            month,
-            fontsize=22,
-            fontstyle='italic'
-        )
-
-        ax.set_extent([lon_min, lon_max, lat_min, lat_max], crs=ccrs.PlateCarree())
-
-    plt.tight_layout()
-
-    outfile = os.path.join(
-        save_dir,
-        f'{variable_name}_seasonal_panel.png'
+    cbar.ax.tick_params(
+        labelsize=10
     )
 
     plt.savefig(
-        outfile,
+        output_file,
         dpi=300,
-        bbox_inches='tight'
+        bbox_inches="tight",
     )
 
     plt.close()
 
-    print('Saved:', outfile)
+    print(
+        "Saved:",
+        output_file,
+    )
+
+
+# =====================================================
+# PLOT ALL 15 MAPS IN ONE GRID
+# =====================================================
+
+def plot_anova_grid(
+    lat2d,
+    lon2d,
+    components,
+    total_ss,
+    effect_order,
+    output_file,
+):
+
+    print("\n==============================================")
+    print("CREATING ANOVA GRID")
+    print("==============================================")
+
+    n_maps = len(effect_order)
+
+    ncols = 3
+    nrows = int(
+        np.ceil(
+            n_maps / ncols
+        )
+    )
+
+    fig = plt.figure(
+        figsize=(
+            18,
+            5.5 * nrows,
+        )
+    )
+
+    for i, name in enumerate(
+        effect_order
+    ):
+
+        print(
+            f"Plotting {name}"
+        )
+
+        ax = fig.add_subplot(
+            nrows,
+            ncols,
+            i + 1,
+            projection=ccrs.Robinson(),
+        )
+
+        ax.set_global()
+
+        # -------------------------------------------------
+        # Background.
+        # -------------------------------------------------
+
+        ax.add_feature(
+            cfeature.LAND,
+            facecolor="#f5e6c8",
+            zorder=1,
+        )
+
+        ax.add_feature(
+            cfeature.OCEAN,
+            facecolor="#a6cee3",
+            alpha=0.5,
+            zorder=1,
+        )
+
+        ax.add_feature(
+            cfeature.LAKES,
+            facecolor="#a6cee3",
+            alpha=0.5,
+            zorder=1,
+        )
+
+        ax.add_feature(
+            cfeature.BORDERS.with_scale("50m"),
+            linewidth=0.5,
+            edgecolor="gray",
+            zorder=3,
+        )
+
+        ax.coastlines(
+            resolution="50m",
+            zorder=4,
+        )
+
+        # -------------------------------------------------
+        # Percentage contribution.
+        # -------------------------------------------------
+
+        percentage = (
+            components[name]
+            / total_ss
+            * 100.0
+        )
+
+        percentage[
+            ~np.isfinite(total_ss)
+            | (total_ss == 0)
+        ] = np.nan
+
+        percentage = np.clip(
+            percentage,
+            0,
+            100,
+        )
+
+        masked = np.ma.masked_invalid(
+            percentage
+        )
+
+        mesh = ax.pcolormesh(
+            lon2d,
+            lat2d,
+            masked,
+            transform=ccrs.PlateCarree(),
+            shading="auto",
+            cmap="viridis",
+            vmin=0,
+            vmax=100,
+            zorder=5,
+        )
+
+        # -------------------------------------------------
+        # Title.
+        # -------------------------------------------------
+
+        ax.set_title(
+            name,
+            fontsize=16,
+            fontweight="bold",
+        )
+
+        # -------------------------------------------------
+        # Gridlines.
+        # -------------------------------------------------
+
+        gl = ax.gridlines(
+            draw_labels=True,
+            linewidth=0.4,
+            color="gray",
+            alpha=0.6,
+            linestyle="--",
+        )
+
+        gl.top_labels = False
+        gl.right_labels = False
+
+        gl.xlabel_style = {
+            "fontsize": 9
+        }
+
+        gl.ylabel_style = {
+            "fontsize": 9
+        }
+
+        # -------------------------------------------------
+        # Individual colorbar.
+        # -------------------------------------------------
+
+        cbar = plt.colorbar(
+            mesh,
+            ax=ax,
+            orientation="horizontal",
+            pad=0.035,
+            shrink=0.8,
+        )
+
+        cbar.set_label(
+            "%",
+            fontsize=10,
+        )
+
+        cbar.ax.tick_params(
+            labelsize=8
+        )
+
+    # -----------------------------------------------------
+    # Overall title.
+    # -----------------------------------------------------
+
+    fig.suptitle(
+        "Spatial 4-Factor ANOVA — fCH₄ wetland\n"
+        "2005 June",
+        fontsize=24,
+        fontweight="bold",
+        y=0.995,
+    )
+
+    plt.tight_layout(
+        rect=[
+            0,
+            0,
+            1,
+            0.98,
+        ]
+    )
+
+    plt.savefig(
+        output_file,
+        dpi=300,
+        bbox_inches="tight",
+    )
+
+    # -------------------------------------------------
+    # SHOW MAP WINDOW
+    # -------------------------------------------------
+
+    plt.show()
+
+    plt.close()
+
+    print(
+        "\nSaved ANOVA grid:",
+        output_file,
+    )
+
+
+# =====================================================
+# MAIN
+# =====================================================
+
+if __name__ == "__main__":
+
+    print("\n")
+    print("==============================================")
+    print("SPATIAL FACTORIAL ANOVA")
+    print("==============================================")
+    print(
+        "Map:",
+        MAP_FILENAME,
+    )
+
+    # -------------------------------------------------
+    # 1. Read coordinates from NetCDF.
+    # -------------------------------------------------
+
+    lat2d, lon2d = (
+        read_lat_lon_from_netcdf(
+            NETCDF_FILE
+        )
+    )
+
+    # -------------------------------------------------
+    # 2. Find all 48 map files.
+    # -------------------------------------------------
+
+    map_files = load_all_maps()
+
+    # -------------------------------------------------
+    # 3. Read all 48 2D maps.
+    # -------------------------------------------------
+
+    data = build_data_array(
+        map_files,
+        lat2d,
+        lon2d,
+    )
+
+    print("\n==============================================")
+    print("DATA ARRAY")
+    print("==============================================")
+
+    print(
+        "Shape:",
+        data.shape,
+    )
+
+    print(
+        "Expected:",
+        "(3, 4, 2, 2, n_lat, n_lon)"
+    )
+
+    # -------------------------------------------------
+    # 4. Calculate total spatial SS.
+    # -------------------------------------------------
+
+    print("\n==============================================")
+    print("TOTAL SUM OF SQUARES")
+    print("==============================================")
+
+    total_ss = calculate_total_ss(
+        data
+    )
+
+    # -------------------------------------------------
+    # 5. Calculate all 15 ANOVA components.
+    # -------------------------------------------------
+
+    (
+        components,
+        grand_mean,
+        valid_count,
+        effect_order,
+    ) = calculate_spatial_anova(
+        data
+    )
+
+    # -------------------------------------------------
+    # 6. Check decomposition.
+    # -------------------------------------------------
+
+    component_ss = np.zeros_like(
+        total_ss
+    )
+
+    for name in effect_order:
+
+        component_ss += components[
+            name
+        ]
+
+    valid = (
+        np.isfinite(total_ss)
+        & (total_ss > 0)
+    )
+
+    difference = (
+        total_ss
+        - component_ss
+    )
+
+    max_absolute_error = np.nanmax(
+        np.abs(
+            difference[valid]
+        )
+    )
+
+    max_relative_error = np.nanmax(
+        np.abs(
+            difference[valid]
+            / total_ss[valid]
+        )
+    )
+
+    print("\n==============================================")
+    print("SPATIAL SUM OF SQUARES CHECK")
+    print("==============================================")
+
+    print(
+        "Maximum absolute error:",
+        f"{max_absolute_error:.6e}"
+    )
+
+    print(
+        "Maximum relative error:",
+        f"{max_relative_error:.6e}"
+    )
+
+    # -------------------------------------------------
+    # 7. Percentage contribution maps.
+    # -------------------------------------------------
+
+    print("\n==============================================")
+    print("ANOVA PERCENTAGES")
+    print("==============================================")
+
+    for name in effect_order:
+
+        percentage = (
+            components[name]
+            / total_ss
+            * 100.0
+        )
+
+        percentage[
+            ~valid
+        ] = np.nan
+
+        print(
+            f"{name:30s} "
+            f"mean={np.nanmean(percentage):8.3f}% "
+            f"max={np.nanmax(percentage):8.3f}%"
+        )
+
+    # -------------------------------------------------
+    # 8. Output directory.
+    # -------------------------------------------------
+
+    output_dir = (
+        directory
+        / "spatial_anova"
+    )
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    # -------------------------------------------------
+    # 9. Save individual maps.
+    # -------------------------------------------------
+
+    for name in effect_order:
+
+        percentage = (
+            components[name]
+            / total_ss
+            * 100.0
+        )
+
+        percentage[
+            ~valid
+        ] = np.nan
+
+        safe_name = (
+            name
+            .replace(":", "_")
+        )
+
+        output_file = (
+            output_dir
+            / f"anova_{safe_name}_percent.png"
+        )
+
+        plot_anova_map(
+            lat2d,
+            lon2d,
+            percentage,
+            f"ANOVA contribution: {name}",
+            output_file,
+            vmax=100,
+        )
+
+    # -------------------------------------------------
+    # 10. Create the 15-panel grid.
+    # -------------------------------------------------
+
+    grid_file = (
+        output_dir
+        / "fch4_wetl_2005_Jun_ANOVA_grid.png"
+    )
+
+    plot_anova_grid(
+        lat2d,
+        lon2d,
+        components,
+        total_ss,
+        effect_order,
+        grid_file,
+    )
+
+    print("\n==============================================")
+    print("SUCCESS")
+    print("==============================================")
+
+    print(
+        "Spatial ANOVA complete."
+    )
+
+    print(
+        "Output directory:",
+        output_dir,
+    )
+
+    print(
+        "Grid:",
+        grid_file,
+    )
